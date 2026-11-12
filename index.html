@@ -108,7 +108,7 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = id => document.getElementById(id);
 
 // ---------- Accounts ----------
-const toEmail = u => 'chessstack_' + u + '@gmail.com';
+const toEmail = u => u + '@' + EMAIL_DOMAIN;
 const msg = t => { $('msg').textContent = t; };
 
 async function auth(mode) {
