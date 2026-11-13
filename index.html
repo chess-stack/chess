@@ -51,6 +51,7 @@ main{display:flex;flex-wrap:wrap;gap:1.4rem;justify-content:center;padding:1.4re
 #moves b{color:var(--ink);font-weight:500}
 .btns{display:flex;gap:.5rem;flex-wrap:wrap}
 .btns button{flex:1}
+#err{position:fixed;left:0;right:0;bottom:0;z-index:9;background:#7a1f16;color:#fff;padding:.8rem 1rem;font-size:.95rem}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -100,7 +101,14 @@ main{display:flex;flex-wrap:wrap;gap:1.4rem;justify-content:center;padding:1.4re
 </section>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.2/chess.js"></script>
+<div id="err" class="hidden" role="alert"></div>
+<script>
+function showErr(t){var b=document.getElementById('err');b.textContent='Something broke: '+t;b.classList.remove('hidden');}
+window.addEventListener('error',function(e){showErr(e.message||'script failed to load');});
+window.addEventListener('unhandledrejection',function(e){showErr((e.reason&&e.reason.message)||e.reason);});
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.js"></script>
+<script>window.Chess||document.write('<script src="https://cdn.jsdelivr.net/npm/chess.js@0.10.3/chess.js"><\/script>');</script>
 <script>
 // ---------- Connection settings (safe to be public) ----------
 const SUPABASE_URL = 'https://fjyylqdpxafwvxqcqehb.supabase.co';
@@ -159,6 +167,7 @@ async function route(session) {
 db.auth.onAuthStateChange((_e, session) => setTimeout(() => route(session), 0));
 
 // ---------- Chess ----------
+if (typeof Chess === 'undefined') throw new Error('The chess library did not load. Check your internet connection or ad blocker.');
 const game = new Chess();
 let sel = null, legal = [], last = [], flipped = false;
 const GLYPH = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
