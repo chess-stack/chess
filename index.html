@@ -59,8 +59,10 @@ main{display:flex;flex-wrap:wrap;gap:1.4rem;justify-content:center;padding:1.4re
 <section id="auth">
   <div class="card">
     <h1>Chess Stack</h1>
-    <p>Log in or create an account to play.</p>
-    <label for="user">Username (3–20 letters, numbers or _)</label>
+    <p>Log in, or create an account with your email.</p>
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false">
+    <label for="user">Username (only needed when creating an account)</label>
     <input id="user" autocomplete="username" autocapitalize="none" spellcheck="false">
     <label for="pass">Password (6+ characters)</label>
     <input id="pass" type="password" autocomplete="current-password">
@@ -103,28 +105,38 @@ main{display:flex;flex-wrap:wrap;gap:1.4rem;justify-content:center;padding:1.4re
 // ---------- Connection settings (safe to be public) ----------
 const SUPABASE_URL = 'https://fjyylqdpxafwvxqcqehb.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_fZCqxAnTBW3jl3QsqUA7OA_QDssW4Ml';
-const EMAIL_DOMAIN = 'chessstack.example'; // usernames become fake emails behind the scenes
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = id => document.getElementById(id);
 
 // ---------- Accounts ----------
-const toEmail = u => u + '@' + EMAIL_DOMAIN;
 const msg = t => { $('msg').textContent = t; };
 
 async function auth(mode) {
+  const email = $('email').value.trim().toLowerCase();
   const u = $('user').value.trim().toLowerCase();
   const p = $('pass').value;
   msg('');
-  if (!/^[a-z0-9_]{3,20}$/.test(u)) return msg('Username must be 3–20 letters, numbers or underscores.');
+  if (!/^\S+@\S+\.\S+$/.test(email)) return msg('Enter a valid email address.');
   if (p.length < 6) return msg('Password must be at least 6 characters.');
-  const r = mode === 'signup'
-    ? await db.auth.signUp({ email: toEmail(u), password: p, options: { data: { username: u } } })
-    : await db.auth.signInWithPassword({ email: toEmail(u), password: p });
-  if (r.error) {
-    return msg(/already|registered/i.test(r.error.message) ? 'That username is taken. Pick another or log in.'
-      : /invalid login/i.test(r.error.message) ? 'Wrong username or password.' : r.error.message);
+  let r;
+  if (mode === 'signup') {
+    if (!/^[a-z0-9_]{3,20}$/.test(u)) return msg('Username must be 3–20 letters, numbers or underscores.');
+    r = await db.auth.signUp({
+      email, password: p,
+      options: { data: { username: u }, emailRedirectTo: location.origin + location.pathname }
+    });
+  } else {
+    r = await db.auth.signInWithPassword({ email, password: p });
   }
-  if (!r.data.session) msg('Account created. Press Log in.');
+  if (r.error) {
+    const m = r.error.message;
+    return msg(/already|registered/i.test(m) ? 'That email is already registered. Try logging in.'
+      : /database error/i.test(m) ? 'That username is taken. Pick another.'
+      : /not confirmed/i.test(m) ? 'Confirm your email first: open the link we sent you.'
+      : /invalid login/i.test(m) ? 'Wrong email or password.'
+      : m);
+  }
+  if (!r.data.session) msg('Account created. Check your email, click the confirmation link, then log in.');
 }
 $('btnLogin').onclick = () => auth('login');
 $('btnSignup').onclick = () => auth('signup');
