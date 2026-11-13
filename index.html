@@ -39,7 +39,7 @@ main{display:flex;flex-wrap:wrap;gap:1.4rem;justify-content:center;padding:1.4re
 .sq{position:relative;display:grid;place-items:center;cursor:pointer;overflow:hidden;min-width:0;min-height:0;font-size:calc(var(--bs) / 8 * .72);line-height:1}
 .sq.l{background:var(--light)} .sq.d{background:var(--dark)}
 .sq.last{box-shadow:inset 0 0 0 100px rgba(240,180,41,.28)}
-.sq.sel{box-shadow:inset 0 0 0 4px var(--gold)}
+.sq.sel{background-image:radial-gradient(circle,rgba(240,180,41,.3) 0 58%,var(--gold) 59% 68%,transparent 69%)}
 .sq.chk{box-shadow:inset 0 0 0 100px rgba(255,90,70,.55)}
 .sq .pc{position:relative;z-index:1}
 .sq.hint:not(.cap){background-image:radial-gradient(circle,rgba(17,32,43,.38) 0 14%,transparent 15%)}
@@ -67,9 +67,9 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
 #board{position:relative}
 .sq.pre{box-shadow:inset 0 0 0 100px rgba(215,40,40,.55)}
 .bw{--bs:min(92vw,560px);width:var(--bs)}
-.cap{display:flex;align-items:center;flex-wrap:wrap;gap:0;min-height:30px;padding:2px 8px;margin:4px 0;background:#9db3c0;border-radius:4px;font-size:1.25rem;line-height:1.1}
-.cap .pc{font-size:1.25rem;margin-right:-4px}
-.cap .adv{margin-left:12px;font-family:system-ui,sans-serif;font-size:.9rem;font-weight:700;color:#10202b}
+.capstrip{display:flex;align-items:center;flex-wrap:wrap;gap:0;min-height:30px;padding:2px 8px;margin:4px 0;background:#9db3c0;border-radius:4px;font-size:1.25rem;line-height:1.1}
+.capstrip .pc{font-size:1.25rem;margin-right:-4px}
+.capstrip .adv{margin-left:12px;font-family:system-ui,sans-serif;font-size:.9rem;font-weight:700;color:#10202b}
 #ov{position:fixed;inset:0;z-index:20;background:rgba(5,12,18,.72);display:grid;place-items:center;padding:1rem}
 #ov .box{width:100%;max-width:400px;background:var(--panel);border:2px solid var(--gold);border-radius:12px;padding:1.6rem;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5)}
 #ov h2{font-size:2rem;margin-bottom:.3rem}
@@ -98,7 +98,15 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
 #insp{position:fixed;inset:0;z-index:25;background:rgba(5,12,18,.8);display:grid;place-items:center;padding:1rem}
 #insp .box{width:100%;max-width:380px;background:var(--panel);border:2px solid var(--gold);border-radius:12px;padding:1.4rem;text-align:center}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:.7rem}
-.card2{background:#0d1a23;border:2px solid var(--line);border-radius:8px;padding:.5rem;text-align:center;cursor:pointer;overflow:hidden;font-size:.85rem}
+.card2{position:relative;background:#0d1a23;border:1px solid var(--line);border-radius:6px;text-align:center;overflow:hidden;font-size:.85rem}
+.card2 .cin{padding:.5rem .4rem .4rem}
+.card2 .cimg{height:92px;display:grid;place-items:center;overflow:hidden}
+.card2 .cimg img{max-height:100%;max-width:100%}
+.card2 .rbar{height:6px}
+.card2 .qty{position:absolute;top:4px;right:6px;background:rgba(0,0,0,.55);border-radius:4px;padding:0 .35rem;font-size:.8rem}
+.card2 button{width:100%;margin-top:.4rem;padding:.3rem}
+.boxph{font-size:3rem;color:#5d7383}
+.wearov{position:absolute;inset:0;pointer-events:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .1 0 0 0 0 .08 0 0 0 0 .06 0 0 0 2.2 -.95'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>"),repeating-linear-gradient(118deg,transparent 0 11px,rgba(235,235,235,.5) 11px 12px,transparent 12px 29px)}
 .card2 small{color:var(--mute);display:block}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -136,7 +144,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
   </header>
   <nav id="nav"></nav>
   <main id="playView">
-    <div class="bw"><div class="cap" id="capTop"></div><div id="board" aria-label="Chess board"></div><div class="cap" id="capBot"></div></div>
+    <div class="bw"><div class="capstrip" id="capTop"></div><div id="board" aria-label="Chess board"></div><div class="capstrip" id="capBot"></div></div>
     <div class="side">
       <div class="bot">
         <select id="botSel" aria-label="Choose a bot"></select>
@@ -176,7 +184,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
 </div>
 <div id="insp" class="hidden"><div class="box" id="inspBox"></div></div>
 <div id="dev" class="hidden"><div class="panel">
-  <div class="dh"><b>Dev tools</b><span class="btns"><button id="dvTabItems">Items</button><button id="dvTabColls">Collections</button><button id="dvTabCases">Cases</button><button id="dvTabOps">Operations</button><button id="dvTabShop">Shop keys</button><button id="dvTabShopC">Shop cases</button><button id="dvClose">Close</button></span></div>
+  <div class="dh"><b>Dev tools</b><span class="btns"><button id="dvTabItems">Items</button><button id="dvTabColls">Collections</button><button id="dvTabCases">Cases</button><button id="dvTabOps">Operations</button><button id="dvTabShop">Shop keys</button><button id="dvTabShopC">Shop cases</button><button id="dvTabMoney">Money</button><button id="dvClose">Close</button></span></div>
   <div id="devBody"></div><div id="devMsg"></div>
 </div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -417,7 +425,8 @@ function premoveClick(sq) {
   if (pre) { pre = null; sel = null; legal = []; render(); return; }   // any click cancels
   if (sel && legal.find(m => m.to === sq)) { pre = { from: sel, to: sq }; sel = null; legal = []; render(); return; }
   const p = game.get(sq);
-  if (p && p.color === myColor) { sel = sq; legal = hypoMoves(sq); } else { sel = null; legal = []; }
+  if (sq === sel) { sel = null; legal = []; }
+  else if (p && p.color === myColor) { sel = sq; legal = hypoMoves(sq); } else { sel = null; legal = []; }
   render();
 }
 function playPremove() {
@@ -478,7 +487,8 @@ $('board').addEventListener('click', e => {
     last = [sel, sq]; sel = null; legal = []; moved = true;
   } else {
     const p = game.get(sq);
-    if (p && p.color === game.turn()) { sel = sq; legal = game.moves({ square: sq, verbose: true }); }
+    if (sq === sel) { sel = null; legal = []; }
+    else if (p && p.color === game.turn()) { sel = sq; legal = game.moves({ square: sq, verbose: true }); }
     else { sel = null; legal = []; }
   }
   render();
@@ -697,6 +707,7 @@ $('dvTabItems').onclick = () => { devTab = 'items'; devEdit = null; devRender();
 $('dvTabColls').onclick = () => { devTab = 'collections'; devEdit = null; devRender(); };
 $('dvTabCases').onclick = () => { devTab = 'cases'; devEdit = null; devRender(); };
 $('dvTabShopC').onclick = () => { devTab = 'shop_cases'; devEdit = null; devRender(); };
+$('dvTabMoney').onclick = () => { devTab = 'money'; devEdit = null; devRender(); };
 $('dvTabShop').onclick = () => { devTab = 'shop_keys'; devEdit = null; devRender(); };
 $('dvTabOps').onclick = () => { devTab = 'operations'; devEdit = null; devRender(); };
 
@@ -763,9 +774,16 @@ async function collect(fields, cur, pfx) {
   return row;
 }
 const nameOf = (list, id) => { const x = list.find(r => r.id === id); return x ? x.name : '-'; };
+async function devMoney() {
+  const ses = await db.auth.getSession();
+  const r = await db.from('profiles').select('balance').eq('id', ses.data.session.user.id).single();
+  $('devBody').innerHTML = '<b>Your balance: $' + Number(r.data ? r.data.balance : 0).toFixed(2) + '</b><label for="dv_amt">Amount</label><input id="dv_amt" type="number" min="0" step="0.01" value="100">' +
+    '<div class="btns" style="margin-top:.8rem"><button class="primary" data-act="madd">Add money</button><button data-act="msub">Remove money</button></div>';
+}
 async function devRender() {
   if (!devOpen) return;
-  for (const [id, t] of [['dvTabItems', 'items'], ['dvTabColls', 'collections'], ['dvTabOps', 'operations'], ['dvTabShop', 'shop_keys'], ['dvTabCases', 'cases'], ['dvTabShopC', 'shop_cases']]) $(id).className = devTab === t ? 'primary' : '';
+  for (const [id, t] of [['dvTabItems', 'items'], ['dvTabColls', 'collections'], ['dvTabOps', 'operations'], ['dvTabShop', 'shop_keys'], ['dvTabCases', 'cases'], ['dvTabShopC', 'shop_cases'], ['dvTabMoney', 'money']]) $(id).className = devTab === t ? 'primary' : '';
+  if (devTab === 'money') return devMoney();
   const [ci, ii, rr, ca] = await Promise.all([db.from('collections').select('*').order('created_at'), db.from('items').select('*').order('created_at'),
                                           db.from(devTab).select('*').order('created_at', { ascending: false }), db.from('cases').select('*').order('created_at')]);
   const bad = ci.error || ii.error || rr.error || ca.error;
@@ -796,6 +814,14 @@ $('devBody').addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const a = b.dataset.act, id = b.dataset.id;
   try {
+    if (a === 'madd' || a === 'msub') {
+      const amt = Number($('dv_amt').value);
+      if (!(amt > 0)) throw new Error('Enter an amount above 0.');
+      const { error } = await db.rpc('dev_adjust_balance', { p_amount: a === 'madd' ? amt : -amt });
+      if (error) throw error;
+      const ses = await db.auth.getSession(); loadProfile(ses.data.session.user.id);
+      devMsg(a === 'madd' ? 'Money added.' : 'Money removed.'); return devMoney();
+    }
     if (a === 'cancel') { devEdit = null; return devRender(); }
     if (a === 'edit') { devEdit = devRows.find(r => r.id === id); return devRender(); }
     if (a === 'del' || a === 'delq' || a === 'dels') {
@@ -910,20 +936,26 @@ $('shopView').addEventListener('click', async e => {
 const COND = w => w < 0.15 ? 'Mint Condition' : w < 0.45 ? 'Mint' : w < 0.75 ? 'Average' : w < 0.95 ? 'Bad' : 'Terrible';
 const RCOL = { gray: '#9aa5ad', 'light blue': '#6fb7ff', blue: '#3b6cf0', purple: '#8a4fe0', pink: '#e04fb8', red: '#e0463a', gold: '#f0b429' };
 let invData = { items: [], inv: [] };
-function patStyle(it, seed) {
+function patParts(it, seed) {
   const fx = it.is_pattern_based && it.pattern_config && it.pattern_config.effect, t = Math.max(1, seed || 1) / 999;
-  if (fx === 'color change') return 'filter:hue-rotate(' + Math.round(t * 360) + 'deg);';
-  if (fx === 'size change') return 'transform:scale(' + (0.7 + t * 0.5).toFixed(2) + ');';
-  if (fx === 'brightness') return 'filter:brightness(' + (0.6 + t * 0.8).toFixed(2) + ');';
-  return '';
+  if (fx === 'color change') return { f: 'hue-rotate(' + Math.round(t * 360) + 'deg)', t: '' };
+  if (fx === 'size change') return { f: '', t: 'scale(' + (0.7 + t * 0.5).toFixed(2) + ')' };
+  if (fx === 'brightness') return { f: 'brightness(' + (0.6 + t * 0.8).toFixed(2) + ')', t: '' };
+  return { f: '', t: '' };
 }
-function itemImg(it, seed, h) {
-  if (it.image_url) return '<img src="' + esc(it.image_url) + '" alt="" style="height:' + h + 'px;max-width:100%;object-fit:contain;' + patStyle(it, seed) + '">';
-  return '<div class="pc ' + (it.side === 'black' ? 'b' : 'w') + '" style="height:' + h + 'px;display:grid;place-items:center;font-size:' + h * 0.7 + 'px">' + GLYPH[CURG[it.piece] || 'p'] + '\uFE0E</div>';
+// wear: 0 = factory fresh, 1 = destroyed. Fades the colors, darkens, and adds grime and scratches over the piece only.
+function itemImg(it, seed, h, wear) {
+  const w = Math.max(0, Math.min(1, Number(wear) || 0)), p = patParts(it, seed);
+  const filt = (p.f ? p.f + ' ' : '') + 'saturate(' + (1 - 0.55 * w).toFixed(2) + ') brightness(' + (1 - 0.3 * w).toFixed(2) + ') contrast(' + (1 - 0.15 * w).toFixed(2) + ')';
+  const tf = p.t ? 'transform:' + p.t + ';' : '';
+  if (!it.image_url) return '<div class="pc ' + (it.side === 'black' ? 'b' : 'w') + '" style="height:' + h + 'px;display:grid;place-items:center;font-size:' + h * 0.7 + 'px;filter:' + filt + ';' + tf + '">' + GLYPH[CURG[it.piece] || 'p'] + '\uFE0E</div>';
+  const u = esc(it.image_url), mask = "-webkit-mask:url('" + u + "') center/contain no-repeat;mask:url('" + u + "') center/contain no-repeat;";
+  return '<span style="position:relative;display:inline-block;line-height:0;' + tf + '"><img src="' + u + '" alt="" style="height:' + h + 'px;max-width:100%;object-fit:contain;filter:' + filt + '">' +
+    (w > 0.02 ? '<span class="wearov" style="' + mask + 'opacity:' + Math.min(0.9, w * 1.15).toFixed(2) + '"></span>' : '') + '</span>';
 }
 function inspect(it, wear, seed, head) {
   const col = RCOL[it.rarity] || '#fff';
-  $('inspBox').innerHTML = (head ? '<h2 style="margin-bottom:.6rem">' + esc(head) + '</h2>' : '') + '<div style="overflow:hidden;padding:.6rem">' + itemImg(it, seed, 150) + '</div>' +
+  $('inspBox').innerHTML = (head ? '<h2 style="margin-bottom:.6rem">' + esc(head) + '</h2>' : '') + '<div style="overflow:hidden;padding:.6rem">' + itemImg(it, seed, 150, wear) + '</div>' +
     '<h3 style="font-family:Georgia,serif;color:' + col + ';margin:.4rem 0 0">' + esc(it.name) + '</h3><div style="color:var(--mute)">' + esc(it.description) + '</div>' +
     '<div class="stat" style="display:flex;justify-content:space-between;padding:.5rem .7rem;margin-top:.6rem;background:#0d1a23;border-radius:8px"><span style="color:var(--mute)">Rarity</span><b style="color:' + col + '">' + esc(it.rarity) + '</b></div>' +
     '<div class="stat" style="display:flex;justify-content:space-between;padding:.5rem .7rem;margin-top:.4rem;background:#0d1a23;border-radius:8px"><span style="color:var(--mute)">Wear</span><b>' + COND(wear) + ' · ' + Number(wear).toFixed(10) + '</b></div>' +
@@ -945,13 +977,17 @@ async function invRender() {
   const cname = id => { const c = (cs.data || []).find(x => x.id === id); return c ? c.name : '?'; };
   const keys = {}; (uk.data || []).forEach(k => { keys[k.case_id] = k.qty; });
   const cases = (uc.data || []).filter(r => r.qty > 0), keyRows = (uk.data || []).filter(r => r.qty > 0);
-  $('invView').innerHTML = '<h2 style="margin-bottom:.8rem">Inventory</h2>' +
-    '<h3>Cases</h3>' + (cases.map(r => '<div class="op"><div class="row2"><div><b>' + esc(cname(r.case_id)) + '</b> × ' + r.qty + '<br><small style="color:var(--mute)">Keys you have: ' + (keys[r.case_id] || 0) + '</small></div>' +
-      '<button class="primary" data-open="' + r.case_id + '"' + (keys[r.case_id] > 0 ? '' : ' disabled') + '>' + (keys[r.case_id] > 0 ? 'Open' : 'Needs a key') + '</button></div></div>').join('') || '<p style="color:var(--mute)">No cases.</p>') +
-    '<h3 style="margin-top:1rem">Keys</h3>' + (keyRows.map(r => '<div class="op"><b>' + esc(cname(r.case_id)) + ' Key</b> × ' + r.qty + '</div>').join('') || '<p style="color:var(--mute)">No keys.</p>') +
-    '<h3 style="margin-top:1rem">Items (' + invData.inv.length + ')</h3><div class="grid">' + invData.inv.map(r => {
-      const it = invData.items.find(x => x.id === r.item_id); if (!it) return '';
-      return '<div class="card2" data-inv="' + r.id + '" style="border-color:' + (RCOL[it.rarity] || 'var(--line)') + '">' + itemImg(it, r.pattern_seed, 80) + '<b>' + esc(it.name) + '</b><small>' + COND(Number(r.wear)) + '</small></div>'; }).join('') + '</div>';
+  const caseOf = id => (cs.data || []).find(x => x.id === id) || {};
+  const typeLabel = it => it.kind === 'piece' ? (it.piece ? it.piece[0].toUpperCase() + it.piece.slice(1) : 'Piece') : (it.kind || 'Item');
+  const card = (img, name, sub, color, extra, btn, attrs) => '<div class="card2"' + (attrs || '') + '>' + extra + '<div class="cin"><div class="cimg">' + img + '</div><b>' + esc(name) + '</b><small style="color:var(--mute);display:block">' + esc(sub) + '</small>' + (btn || '') + '</div><div class="rbar" style="background:' + color + '"></div></div>';
+  const caseImg = c => c.image_url ? '<img src="' + esc(c.image_url) + '" alt="">' : '<div class="boxph">▣</div>';
+  const cardsCases = cases.map(r => { const c = caseOf(r.case_id), k = keys[r.case_id] || 0;
+    return card(caseImg(c), c.name || '?', 'Case · ' + k + (k === 1 ? ' key' : ' keys'), RCOL.gray, '<span class="qty">×' + r.qty + '</span>',
+      '<button class="primary" data-open="' + r.case_id + '"' + (k > 0 ? '' : ' disabled') + '>' + (k > 0 ? 'Open' : 'Needs a key') + '</button>'); }).join('');
+  const cardsKeys = keyRows.map(r => { const c = caseOf(r.case_id); return card(caseImg(c), (c.name || '?') + ' Key', 'Key', RCOL.gray, '<span class="qty">×' + r.qty + '</span>'); }).join('');
+  const cardsItems = invData.inv.map(r => { const it = invData.items.find(x => x.id === r.item_id); if (!it) return '';
+    return card(itemImg(it, r.pattern_seed, 84, r.wear), it.name, typeLabel(it), RCOL[it.rarity] || RCOL.gray, '', '', ' data-inv="' + r.id + '" style="cursor:pointer"'); }).join('');
+  $('invView').innerHTML = '<h2 style="margin-bottom:.8rem">Inventory</h2>' + ((cardsCases + cardsKeys + cardsItems) ? '<div class="grid">' + cardsCases + cardsKeys + cardsItems + '</div>' : '<p style="color:var(--mute)">Nothing here yet.</p>');
 }
 $('invView').addEventListener('click', async e => {
   const o = e.target.closest('[data-open]');
