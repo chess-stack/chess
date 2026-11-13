@@ -52,6 +52,8 @@ main{display:flex;flex-wrap:wrap;gap:1.4rem;justify-content:center;padding:1.4re
 .btns{display:flex;gap:.5rem;flex-wrap:wrap}
 .btns button{flex:1}
 #err{position:fixed;left:0;right:0;bottom:0;z-index:9;background:#7a1f16;color:#fff;padding:.8rem 1rem;font-size:.95rem}
+select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px solid var(--line);background:#0d1a23;color:var(--ink)}
+.bot{display:flex;flex-direction:column;gap:.5rem;padding:.9rem;background:var(--panel);border:1px solid var(--line);border-radius:8px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -89,6 +91,18 @@ main{display:flex;flex-wrap:wrap;gap:1.4rem;justify-content:center;padding:1.4re
   <main>
     <div id="board" aria-label="Chess board"></div>
     <div class="side">
+      <div class="bot">
+        <select id="botSel" aria-label="Choose a bot"></select>
+        <select id="colorSel" aria-label="Choose your side">
+          <option value="white">Play as White</option>
+          <option value="black">Play as Black</option>
+          <option value="random">Random side</option>
+        </select>
+        <div class="btns">
+          <button id="btnBot" class="primary">Play bot</button>
+          <button id="btnResign">Resign</button>
+        </div>
+      </div>
       <div id="status"></div>
       <div id="moves"></div>
       <div class="btns">
@@ -151,17 +165,24 @@ $('btnSignup').onclick = () => auth('signup');
 $('btnOut').onclick = () => db.auth.signOut();
 $('pass').addEventListener('keydown', e => { if (e.key === 'Enter') auth('login'); });
 
+async function loadProfile(uid) {
+  const { data } = await db.from('profiles').select('username,balance,elo,level,rating_deviation').eq('id', uid).single();
+  if (!data) return;
+  $('sName').textContent = data.username;
+  // A "?" means the rating is still settling (high rating deviation)
+  $('sElo').textContent = Math.round(data.elo) + (data.rating_deviation > 110 ? '?' : '');
+  $('sLvl').textContent = data.level;
+  $('sBal').textContent = data.balance;
+}
+
 async function route(session) {
   $('auth').classList.toggle('hidden', !!session);
   $('app').classList.toggle('hidden', !session);
   if (!session) return;
-  const { data } = await db.from('profiles').select('username,balance,elo,level').eq('id', session.user.id).single();
-  if (data) {
-    $('sName').textContent = data.username;
-    $('sElo').textContent = data.elo;
-    $('sLvl').textContent = data.level;
-    $('sBal').textContent = data.balance;
-  }
+  await loadProfile(session.user.id);
+  const r = await db.from('bots').select('*').eq('is_active', true).order('elo');
+  bots = r.data || [];
+  $('botSel').innerHTML = bots.map(b => '<option value="' + b.id + '">' + b.name + ' (' + b.elo + ')</option>').join('');
   render();
 }
 db.auth.onAuthStateChange((_e, session) => setTimeout(() => route(session), 0));
@@ -170,6 +191,7 @@ db.auth.onAuthStateChange((_e, session) => setTimeout(() => route(session), 0));
 if (typeof Chess === 'undefined') throw new Error('The chess library did not load. Check your internet connection or ad blocker.');
 const game = new Chess();
 let sel = null, legal = [], last = [], flipped = false;
+let mode = 'local', myColor = 'w', bots = [], bot = null, botGame = null, thinking = false;
 const GLYPH = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
 
 function kingSquare(color) {
@@ -218,6 +240,7 @@ function renderStatus() {
   else if (game.insufficient_material()) t = 'Draw: not enough pieces.';
   else if (game.in_draw()) t = 'Draw.';
   else t = side + ' to move' + (game.in_check() ? ' (check)' : '');
+  if (mode === 'bot' && !game.game_over()) t = (thinking ? bot.name + ' is thinking...' : 'Your move') + (game.in_check() && !thinking ? ' (check)' : '');
   $('status').textContent = t;
   const h = game.history();
   let html = '';
@@ -230,23 +253,103 @@ function renderStatus() {
 
 $('board').addEventListener('click', e => {
   const el = e.target.closest('.sq');
-  if (!el || game.game_over()) return;
+  if (!el || game.game_over() || (mode === 'bot' && (thinking || game.turn() !== myColor))) return;
   const sq = el.dataset.sq;
   const target = legal.find(m => m.to === sq);
+  let moved = false;
   if (sel && target) {
     game.move({ from: sel, to: sq, promotion: 'q' }); // pawns promote to a queen for now
-    last = [sel, sq]; sel = null; legal = [];
+    last = [sel, sq]; sel = null; legal = []; moved = true;
   } else {
     const p = game.get(sq);
     if (p && p.color === game.turn()) { sel = sq; legal = game.moves({ square: sq, verbose: true }); }
     else { sel = null; legal = []; }
   }
   render();
+  if (moved) afterMove();
 });
 
-$('btnNew').onclick = () => { game.reset(); sel = null; legal = []; last = []; render(); };
-$('btnUndo').onclick = () => { game.undo(); sel = null; legal = []; last = []; render(); };
+$('btnNew').onclick = async () => {
+  if (mode === 'bot' && botGame && !game.game_over()) {
+    if (!confirm('Leaving this bot game counts as a loss. Continue?')) return;
+    await finish('loss');
+  }
+  mode = 'local'; flipped = false; game.reset(); sel = null; legal = []; last = []; render();
+};
+$('btnUndo').onclick = () => { if (mode === 'bot') return; game.undo(); sel = null; legal = []; last = []; render(); };
 $('btnFlip').onclick = () => { flipped = !flipped; render(); };
+
+// ---------- Stockfish (runs in the browser; files live in the /stockfish folder) ----------
+const SF_PATH = 'stockfish/stockfish-18-lite-single.js';
+let engineP = null;
+function startEngine() {
+  if (!engineP) engineP = new Promise((res, rej) => {
+    const w = new Worker(SF_PATH);
+    w.onerror = () => { engineP = null; rej(new Error('Stockfish files not found. Put the two Stockfish files in a folder named "stockfish" in your GitHub repo.')); };
+    w.onmessage = e => { const t = String(e.data); if (t === 'uciok') w.postMessage('isready'); if (t === 'readyok') res(w); };
+    w.postMessage('uci');
+  });
+  return engineP;
+}
+async function engineMove(fen, b) {
+  const w = await startEngine();
+  return new Promise(resolve => {
+    w.onmessage = e => { const m = /^bestmove (\S+)/.exec(String(e.data)); if (m) resolve(m[1]); };
+    w.postMessage('setoption name Skill Level value ' + b.skill_level);
+    w.postMessage('position fen ' + fen);
+    w.postMessage('go depth ' + b.depth + ' movetime ' + b.movetime_ms);
+  });
+}
+
+// ---------- Bot games ----------
+async function botTurn() {
+  const gid = botGame;
+  thinking = true; renderStatus();
+  try {
+    const uci = await engineMove(game.fen(), bot);
+    if (botGame !== gid) { thinking = false; return; }
+    game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+    last = [uci.slice(0, 2), uci.slice(2, 4)];
+  } catch (err) { showErr(err.message); }
+  thinking = false; render(); afterMove();
+}
+
+async function afterMove() {
+  if (mode !== 'bot' || !botGame) return;
+  if (game.game_over()) await finish();
+  else if (game.turn() !== myColor) botTurn();
+}
+
+async function finish(result) {
+  const id = botGame; if (!id) return;
+  botGame = null;
+  if (!result) result = game.in_checkmate() ? (game.turn() === myColor ? 'loss' : 'win') : 'draw';
+  const { error } = await db.rpc('finish_bot_game', { p_game_id: id, p_result: result, p_plies: game.history().length });
+  if (error) showErr(error.message);
+  const { data } = await db.auth.getSession();
+  if (data.session) loadProfile(data.session.user.id);
+}
+
+$('btnBot').onclick = async () => {
+  const b = bots.find(x => x.id === $('botSel').value);
+  if (!b) return;
+  let c = $('colorSel').value;
+  if (c === 'random') c = Math.random() < 0.5 ? 'white' : 'black';
+  const { data, error } = await db.rpc('start_bot_game', { p_bot_id: b.id, p_color: c });
+  if (error) return showErr(error.message);
+  game.reset(); sel = null; legal = []; last = [];
+  mode = 'bot'; bot = b; botGame = data; myColor = c === 'white' ? 'w' : 'b'; flipped = c === 'black';
+  render();
+  if (game.turn() !== myColor) botTurn();
+};
+
+$('btnResign').onclick = async () => {
+  if (mode !== 'bot' || !botGame || game.game_over()) return;
+  if (!confirm('Resign this game? It counts as a loss.')) return;
+  await finish('loss');
+  mode = 'local'; render();
+  $('status').textContent = 'You resigned.';
+};
 </script>
 </body>
 </html>
