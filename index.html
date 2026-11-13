@@ -45,7 +45,7 @@ main{display:flex;flex-wrap:wrap;gap:1.4rem;justify-content:center;padding:1.4re
 .sq.hint:not(.cap){background-image:radial-gradient(circle,rgba(17,32,43,.38) 0 14%,transparent 15%)}
 .sq.hint.cap{outline:4px solid rgba(17,32,43,.45);outline-offset:-4px}
 nav{display:flex;gap:.5rem;padding:.6rem 1.2rem;border-bottom:1px solid var(--line)}
-#opsView,#shopView{max-width:820px;margin:0 auto;padding:1.2rem}
+#opsView,#shopView,#invView{max-width:820px;margin:0 auto;padding:1.2rem}
 .op{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:1rem;margin-bottom:1rem}
 .op.over{opacity:.6}
 .op h3{margin:0;font-family:Georgia,serif}
@@ -95,6 +95,11 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
 #dev .drop{border:2px dashed var(--line);border-radius:8px;padding:.8rem;text-align:center;color:var(--mute);cursor:pointer;margin-top:.3rem}
 #dev .drop.on{border-color:var(--gold);color:var(--ink)}
 #devMsg{margin-top:.6rem;min-height:1.2rem;color:var(--gold)}
+#insp{position:fixed;inset:0;z-index:25;background:rgba(5,12,18,.8);display:grid;place-items:center;padding:1rem}
+#insp .box{width:100%;max-width:380px;background:var(--panel);border:2px solid var(--gold);border-radius:12px;padding:1.4rem;text-align:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:.7rem}
+.card2{background:#0d1a23;border:2px solid var(--line);border-radius:8px;padding:.5rem;text-align:center;cursor:pointer;overflow:hidden;font-size:.85rem}
+.card2 small{color:var(--mute);display:block}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -156,6 +161,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
   </main>
   <section id="opsView" class="hidden"></section>
   <section id="shopView" class="hidden"></section>
+  <section id="invView" class="hidden"></section>
 </section>
 
 <div id="ov" class="hidden" role="dialog" aria-modal="true">
@@ -168,8 +174,9 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
     <div class="btns"><button class="primary" id="ovAgain">Play again</button><button id="ovClose">Close</button></div>
   </div>
 </div>
+<div id="insp" class="hidden"><div class="box" id="inspBox"></div></div>
 <div id="dev" class="hidden"><div class="panel">
-  <div class="dh"><b>Dev tools</b><span class="btns"><button id="dvTabItems">Items</button><button id="dvTabColls">Collections / cases</button><button id="dvTabOps">Operations</button><button id="dvTabShop">Shop keys</button><button id="dvClose">Close</button></span></div>
+  <div class="dh"><b>Dev tools</b><span class="btns"><button id="dvTabItems">Items</button><button id="dvTabColls">Collections</button><button id="dvTabCases">Cases</button><button id="dvTabOps">Operations</button><button id="dvTabShop">Shop keys</button><button id="dvTabShopC">Shop cases</button><button id="dvClose">Close</button></span></div>
   <div id="devBody"></div><div id="devMsg"></div>
 </div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -656,18 +663,21 @@ $('btnResign').onclick = async () => {
 const KINDS = ['piece', 'set', 'charm', 'board', 'clock skin', 'username effect', 'win effect', 'loss effect', 'checkmate effect', 'draw effect', 'flair'];
 const RARITIES = ['gray', 'light blue', 'blue', 'purple', 'pink', 'red', 'gold'];
 const PIECES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'];
+const FX = ['none', 'color change', 'size change', 'brightness'];
 const F = {
   items: [['name', 'text'], ['description', 'area'], ['kind', 'sel', KINDS], ['piece', 'sel', PIECES], ['rarity', 'sel', RARITIES], ['side', 'sel', ['both', 'white', 'black']],
-          ['wear_cap', 'num'], ['is_pattern_based', 'chk'], ['pattern_effect', 'pcfg'], ['is_default', 'chk'], ['collection_id', 'coll'], ['image_url', 'img']],
+          ['wear_cap', 'num'], ['is_pattern_based', 'chk'], ['pattern_effect', 'pcfg', FX], ['is_default', 'chk'], ['collection_id', 'coll'], ['image_url', 'img']],
   collections: [['name', 'text'], ['description', 'area'], ['is_active_drop', 'chk'], ['image_url', 'img']],
+  cases: [['name', 'text'], ['description', 'area'], ['collection_id', 'coll'], ['allow_gold', 'chk'], ['image_url', 'img']],
   operations: [['name', 'text'], ['description', 'area'], ['currency_piece', 'sel', PIECES], ['lasts_days', 'dur'], ['image_url', 'img']],
-  operation_quests: [['name', 'text'], ['kind', 'sel', ['win games', 'promote pawns', 'capture pieces', 'give checkmate', 'play games', 'custom']], ['description', 'area'], ['goal', 'int'], ['reward_pawns', 'int'], ['reward_item_id', 'item'], ['reward_collection_id', 'coll']],
-  operation_shop: [['item_id', 'item'], ['collection_id', 'coll'], ['cost_pawns', 'int']],
-  shop_keys: [['collection_id', 'coll'], ['price', 'money']]
+  operation_quests: [['name', 'text'], ['kind', 'sel', ['win games', 'promote pawns', 'capture pieces', 'give checkmate', 'play games', 'custom']], ['description', 'area'], ['goal', 'int'], ['reward_pawns', 'int'], ['reward_item_id', 'item'], ['reward_case_id', 'case']],
+  operation_shop: [['item_id', 'item'], ['case_id', 'case'], ['cost_pawns', 'int']],
+  shop_keys: [['case_id', 'case'], ['price', 'money']],
+  shop_cases: [['case_id', 'case'], ['price', 'money']]
 };
-const TITLE = { items: 'item', collections: 'collection / case', operations: 'operation', shop_keys: 'shop key' };
-const rowName = r => r.name || (r.collection_id ? nameOf(devColls, r.collection_id) + ' key' : '');
-let devOpen = false, devTab = 'items', devEdit = null, devRows = [], devItems = [], devColls = [];
+const TITLE = { items: 'item', collections: 'collection / case', operations: 'operation', shop_keys: 'shop key', cases: 'case', shop_cases: 'case for sale' };
+const rowName = r => r.name || (r.case_id ? nameOf(devCases, r.case_id) + (devTab === 'shop_keys' ? ' key' : '') : '');
+let devOpen = false, devTab = 'items', devEdit = null, devRows = [], devItems = [], devColls = [], devCases = [];
 const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const lab = k => k.replace(/_id$/, '').replace(/_/g, ' ');
 const devMsg = (t, bad) => { $('devMsg').style.color = bad ? 'var(--danger)' : 'var(--gold)'; $('devMsg').textContent = t || ''; };
@@ -685,6 +695,8 @@ document.addEventListener('keydown', e => {
 $('dvClose').onclick = () => { devOpen = false; $('dev').classList.add('hidden'); };
 $('dvTabItems').onclick = () => { devTab = 'items'; devEdit = null; devRender(); };
 $('dvTabColls').onclick = () => { devTab = 'collections'; devEdit = null; devRender(); };
+$('dvTabCases').onclick = () => { devTab = 'cases'; devEdit = null; devRender(); };
+$('dvTabShopC').onclick = () => { devTab = 'shop_cases'; devEdit = null; devRender(); };
 $('dvTabShop').onclick = () => { devTab = 'shop_keys'; devEdit = null; devRender(); };
 $('dvTabOps').onclick = () => { devTab = 'operations'; devEdit = null; devRender(); };
 
@@ -694,7 +706,7 @@ function formHtml(fields, cur, pfx) {
     const v = type === 'pcfg' ? (cur.pattern_config || {}).effect : cur[k], id = pfx + k, ida = ' id="' + id + '"';
     if (type === 'chk') { f += '<label><input' + ida + ' type="checkbox"' + (v ? ' checked' : '') + '>' + lab(k) + '</label>'; continue; }
     f += '<label for="' + id + '">' + lab(k) + (type === 'num' ? ' (0 to 1)' : '') + '</label>';
-    if (type === 'text' || type === 'pcfg') f += '<input' + ida + ' value="' + esc(v) + '">';
+    if (type === 'text') f += '<input' + ida + ' value="' + esc(v) + '">';
     else if (type === 'area') f += '<textarea' + ida + ' rows="2">' + esc(v) + '</textarea>';
     else if (type === 'num') f += '<input' + ida + ' type="number" min="0" max="1" step="0.01" value="' + (v == null ? 1 : v) + '">';
     else if (type === 'dur') f += '<input' + ida + ' type="number" min="0" step="0.1" value="' + (cur.id ? 0 : 7) + '">' + (cur.ends_at ? '<small style="color:var(--mute)">Currently ends ' + esc(new Date(cur.ends_at).toLocaleString()) + '. 0 keeps it.</small>' : '');
@@ -704,7 +716,8 @@ function formHtml(fields, cur, pfx) {
       (v ? '<img src="' + esc(v) + '" alt="" style="height:48px;margin-top:.4rem">' : '');
     else {
       const list = type === 'coll' ? [['', '(none)']].concat(devColls.map(c => [c.id, c.name])) :
-                   type === 'item' ? [['', '(none)']].concat(devItems.map(c => [c.id, c.name])) : opts.map(o => [o, o]);
+                   type === 'item' ? [['', '(none)']].concat(devItems.map(c => [c.id, c.name])) :
+                   type === 'case' ? [['', '(none)']].concat(devCases.map(c => [c.id, c.name])) : opts.map(o => [o, o]);
       f += '<select' + ida + '>' + list.map(o => '<option value="' + esc(o[0]) + '"' + (String(v == null ? '' : v) === String(o[0]) ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') + '</select>';
     }
   }
@@ -743,7 +756,7 @@ async function collect(fields, cur, pfx) {
     else if (type === 'pcfg') row.pattern_config = { effect: el.value.trim() };
     else if (type === 'money') row[k] = Math.max(0, Number(el.value) || 0);
     else if (type === 'int') row[k] = Math.max(k === 'goal' ? 1 : 0, Math.floor(Number(el.value) || 0));
-    else if (type === 'coll' || type === 'item') row[k] = el.value || null;
+    else if (type === 'coll' || type === 'item' || type === 'case') row[k] = el.value || null;
     else if (type === 'img') row[k] = el.files[0] ? await devUpload(el.files[0], devTab === 'items' && ($('dv_kind') || {}).value === 'piece') : (cur[k] || null);
     else row[k] = el.value.trim();
   }
@@ -752,12 +765,12 @@ async function collect(fields, cur, pfx) {
 const nameOf = (list, id) => { const x = list.find(r => r.id === id); return x ? x.name : '-'; };
 async function devRender() {
   if (!devOpen) return;
-  for (const [id, t] of [['dvTabItems', 'items'], ['dvTabColls', 'collections'], ['dvTabOps', 'operations'], ['dvTabShop', 'shop_keys']]) $(id).className = devTab === t ? 'primary' : '';
-  const [ci, ii, rr] = await Promise.all([db.from('collections').select('*').order('created_at'), db.from('items').select('*').order('created_at'),
-                                          db.from(devTab).select('*').order('created_at', { ascending: false })]);
-  const bad = ci.error || ii.error || rr.error;
+  for (const [id, t] of [['dvTabItems', 'items'], ['dvTabColls', 'collections'], ['dvTabOps', 'operations'], ['dvTabShop', 'shop_keys'], ['dvTabCases', 'cases'], ['dvTabShopC', 'shop_cases']]) $(id).className = devTab === t ? 'primary' : '';
+  const [ci, ii, rr, ca] = await Promise.all([db.from('collections').select('*').order('created_at'), db.from('items').select('*').order('created_at'),
+                                          db.from(devTab).select('*').order('created_at', { ascending: false }), db.from('cases').select('*').order('created_at')]);
+  const bad = ci.error || ii.error || rr.error || ca.error;
   if (bad) devErr(bad); else devMsg('');
-  devColls = ci.data || []; devItems = ii.data || []; devRows = rr.data || [];
+  devCases = ca.data || []; devColls = ci.data || []; devItems = ii.data || []; devRows = rr.data || [];
   const cur = devEdit || {};
   let h = '<b>' + (devEdit ? 'Editing: ' + esc(rowName(cur)) : 'New ' + TITLE[devTab]) + '</b>' + formHtml(F[devTab], cur, 'dv_') +
     '<div class="btns" style="margin-top:.8rem"><button class="primary" data-act="save">' + (devEdit ? 'Save changes' : 'Create') + '</button>' + (devEdit ? '<button data-act="cancel">Close editor</button>' : '') + '</div>';
@@ -766,15 +779,15 @@ async function devRender() {
                                        db.from('operation_shop').select('*').eq('operation_id', devEdit.id).order('created_at')]);
     if (q.error || sh.error) devErr(q.error || sh.error);
     h += '<div class="sec"><b>Quests</b>' + (q.data || []).map(r => '<div class="li"><div><b>' + esc(r.name) + '</b><br><small>' + esc(r.kind) + ' · do ' + r.goal + ' · ' + r.reward_pawns + ' pawns' +
-        (r.reward_item_id ? ' · item: ' + esc(nameOf(devItems, r.reward_item_id)) : '') + (r.reward_collection_id ? ' · case: ' + esc(nameOf(devColls, r.reward_collection_id)) : '') +
+        (r.reward_item_id ? ' · item: ' + esc(nameOf(devItems, r.reward_item_id)) : '') + (r.reward_case_id ? ' · case: ' + esc(nameOf(devCases, r.reward_case_id)) : '') +
         '</small></div><button data-act="delq" data-id="' + r.id + '">Delete</button></div>').join('') +
       '<div style="margin-top:.8rem"><b>Add a quest</b>' + formHtml(F.operation_quests, {}, 'qs_') + '<div class="btns" style="margin-top:.6rem"><button data-act="addq">Add quest</button></div></div></div>';
-    h += '<div class="sec"><b>Shop (bought with pawns)</b>' + (sh.data || []).map(r => '<div class="li"><div><b>' + esc(r.item_id ? nameOf(devItems, r.item_id) : nameOf(devColls, r.collection_id)) +
+    h += '<div class="sec"><b>Shop (bought with pawns)</b>' + (sh.data || []).map(r => '<div class="li"><div><b>' + esc(r.item_id ? nameOf(devItems, r.item_id) : nameOf(devCases, r.case_id)) +
         '</b><br><small>' + (r.item_id ? 'item' : 'case') + ' · ' + r.cost_pawns + ' pawns</small></div><button data-act="dels" data-id="' + r.id + '">Delete</button></div>').join('') +
       '<div style="margin-top:.8rem"><b>Add to the shop</b> (pick an item or a case)' + formHtml(F.operation_shop, {}, 'sh_') + '<div class="btns" style="margin-top:.6rem"><button data-act="adds">Add to shop</button></div></div></div>';
   } else if (devTab === 'operations') h += '<p style="color:var(--mute)">Create the operation first, then its quests and shop appear here.</p>';
   h += '<hr style="border-color:var(--line);margin:1.2rem 0"><b>' + devRows.length + ' existing</b>' + devRows.map(r => '<div class="li">' + (r.image_url ? '<img src="' + esc(r.image_url) + '" alt="">' : '') +
-    '<div><b>' + esc(rowName(r)) + '</b><br><small>' + esc(devTab === 'items' ? r.kind + ' · ' + r.rarity + ' · ' + r.side : devTab === 'collections' ? (r.is_active_drop ? 'weekly drop' : 'collection') : devTab === 'shop_keys' ? '$' + Number(r.price).toFixed(2) : r.currency_piece + ' · ends ' + new Date(r.ends_at).toLocaleString()) + '</small></div>' +
+    '<div><b>' + esc(rowName(r)) + '</b><br><small>' + esc(devTab === 'items' ? r.kind + ' · ' + r.rarity + ' · ' + r.side : devTab === 'collections' ? (r.is_active_drop ? 'weekly drop' : 'collection') : devTab === 'cases' ? 'holds: ' + nameOf(devColls, r.collection_id) + (r.allow_gold ? '' : ' (no gold)') : (devTab === 'shop_keys' || devTab === 'shop_cases') ? '$' + Number(r.price).toFixed(2) : r.currency_piece + ' · ends ' + new Date(r.ends_at).toLocaleString()) + '</small></div>' +
     '<button data-act="edit" data-id="' + r.id + '">Edit</button><button data-act="del" data-id="' + r.id + '">Delete</button></div>').join('');
   $('devBody').innerHTML = h;
 }
@@ -794,7 +807,7 @@ $('devBody').addEventListener('click', async e => {
     }
     if (a === 'save') {
       const row = await collect(F[devTab], devEdit || {}, 'dv_');
-      if (devTab === 'shop_keys') { if (!row.collection_id || !(row.price > 0)) throw new Error('Pick a case and a price.'); }
+      if (devTab === 'shop_keys' || devTab === 'shop_cases') { if (!row.case_id || !(row.price > 0)) throw new Error('Pick a case and a price.'); }
       else if (!row.name) throw new Error('Give it a name first.');
       if (devTab === 'operations') {
         const d = row.lasts_days; delete row.lasts_days;
@@ -809,7 +822,7 @@ $('devBody').addEventListener('click', async e => {
       const t = a === 'addq' ? 'operation_quests' : 'operation_shop', p = a === 'addq' ? 'qs_' : 'sh_';
       const row = await collect(F[t], {}, p); row.operation_id = devEdit.id;
       if (t === 'operation_quests' && !row.name) throw new Error('Name the quest first.');
-      if (t === 'operation_shop' && !(row.item_id || row.collection_id)) throw new Error('Pick an item or a case.');
+      if (t === 'operation_shop' && !(row.item_id || row.case_id)) throw new Error('Pick an item or a case.');
       const { error } = await db.from(t).insert(row);
       if (error) throw error;
       await devRender(); return devMsg('Added.');
@@ -834,14 +847,14 @@ async function loadOps() {
   if (view.startsWith('op:') && !ops.find(o => 'op:' + o.id === view)) showView('play'); else navRender();
 }
 function navRender() {
-  $('nav').innerHTML = '<button data-v="play">Play</button>' + ops.map(o => '<button data-v="op:' + o.id + '">' + esc(o.name) + '</button>').join('') + '<button data-v="shop">Shop</button>';
+  $('nav').innerHTML = '<button data-v="play">Play</button><button data-v="inv">Inventory</button>' + ops.map(o => '<button data-v="op:' + o.id + '">' + esc(o.name) + '</button>').join('') + '<button data-v="shop">Shop</button>';
   $('nav').querySelectorAll('button').forEach(b => { b.className = b.dataset.v === view ? 'primary' : ''; });
 }
 $('nav').addEventListener('click', e => { const b = e.target.closest('button'); if (b) showView(b.dataset.v); });
 function showView(v) {
   view = v; navRender();
-  $('playView').classList.toggle('hidden', v !== 'play'); $('opsView').classList.toggle('hidden', !v.startsWith('op:')); $('shopView').classList.toggle('hidden', v !== 'shop');
-  if (v.startsWith('op:')) opRender(v.slice(3)); else if (v === 'shop') shopRender();
+  $('playView').classList.toggle('hidden', v !== 'play'); $('opsView').classList.toggle('hidden', !v.startsWith('op:')); $('shopView').classList.toggle('hidden', v !== 'shop'); $('invView').classList.toggle('hidden', v !== 'inv');
+  if (v.startsWith('op:')) opRender(v.slice(3)); else if (v === 'shop') shopRender(); else if (v === 'inv') invRender();
 }
 function fmtLeft(ms) {
   if (ms <= 0) return 'Ended';
@@ -860,7 +873,7 @@ async function opRender(id) {
   const op = ops.find(o => o.id === id); if (!op) return;
   const [q, sh, it, co, pg, bl] = await Promise.all([
     db.from('operation_quests').select('*').eq('operation_id', id).order('created_at'), db.from('operation_shop').select('*').eq('operation_id', id).order('created_at'),
-    db.from('items').select('id,name'), db.from('collections').select('id,name'),
+    db.from('items').select('id,name'), db.from('cases').select('id,name'),
     db.from('operation_progress').select('quest_id,progress,done'), db.from('operation_balances').select('amount').eq('operation_id', id).maybeSingle()]);
   if (view !== 'op:' + id) return;
   const g = GLYPH[CURG[op.currency_piece] || 'p'] + '\uFE0E', nm = (list, x) => { const r = (list || []).find(y => y.id === x); return r ? r.name : '?'; };
@@ -871,24 +884,88 @@ async function opRender(id) {
     '<b>Quests</b>' + (q.data || []).map(x => { const p = prog[x.id] || { progress: 0, done: false }, pct = Math.round(100 * p.progress / x.goal);
       return '<div class="li" style="display:block;margin-top:.5rem;padding:.6rem;border:1px solid var(--line);border-radius:8px"><b>' + esc(x.name) + '</b> <small style="color:var(--mute)">' + esc(x.kind) + '</small>' + (x.description ? '<div style="color:var(--mute)">' + esc(x.description) + '</div>' : '') +
         '<div style="background:#0d1a23;border-radius:6px;height:8px;margin:.4rem 0"><div style="width:' + pct + '%;background:var(--gold);height:100%;border-radius:6px"></div></div>' +
-        '<small>' + (p.done ? 'Done' : p.progress + ' / ' + x.goal) + ' · pays ' + x.reward_pawns + ' ' + g + (x.reward_item_id ? ' + ' + esc(nm(it.data, x.reward_item_id)) : '') + (x.reward_collection_id ? ' + ' + esc(nm(co.data, x.reward_collection_id)) + ' case' : '') + '</small></div>'; }).join('') +
-    '<p style="margin-top:1rem"><b>Shop</b></p><ul style="color:var(--mute)">' + (sh.data || []).map(x => '<li>' + esc(x.item_id ? nm(it.data, x.item_id) : nm(co.data, x.collection_id)) + ' for ' + x.cost_pawns + ' ' + g + '</li>').join('') + '</ul></div>';
+        '<small>' + (p.done ? 'Done' : p.progress + ' / ' + x.goal) + ' · pays ' + x.reward_pawns + ' ' + g + (x.reward_item_id ? ' + ' + esc(nm(it.data, x.reward_item_id)) : '') + (x.reward_case_id ? ' + ' + esc(nm(co.data, x.reward_case_id)) + ' case' : '') + '</small></div>'; }).join('') +
+    '<p style="margin-top:1rem"><b>Shop</b></p><ul style="color:var(--mute)">' + (sh.data || []).map(x => '<li>' + esc(x.item_id ? nm(it.data, x.item_id) : nm(co.data, x.case_id)) + ' for ' + x.cost_pawns + ' ' + g + '</li>').join('') + '</ul></div>';
   tick();
 }
 async function shopRender() {
-  const [k, co] = await Promise.all([db.from('shop_keys').select('*').order('created_at'), db.from('collections').select('id,name,image_url')]);
-  const list = k.data || [];
+  const [sc, sk, cs] = await Promise.all([db.from('shop_cases').select('*').order('created_at'), db.from('shop_keys').select('*').order('created_at'), db.from('cases').select('*')]);
   if (view !== 'shop') return;
-  $('shopView').innerHTML = '<h2 style="margin-bottom:1rem">Shop</h2>' + (list.length ? list.map(r => { const c = (co.data || []).find(x => x.id === r.collection_id) || {};
-    return '<div class="op"><div class="row2"><div><h3>' + esc(c.name) + ' Key</h3><div style="color:var(--mute)">Opens ' + esc(c.name) + '. Cases need a key.</div></div>' +
-      '<button class="primary" data-buy="' + r.id + '">Buy for $' + Number(r.price).toFixed(2) + '</button></div></div>'; }).join('') : '<p style="color:var(--mute)">Nothing for sale yet.</p>');
+  const cname = id => { const c = (cs.data || []).find(x => x.id === id); return c ? c.name : '?'; };
+  const card = (kind, r, title, sub) => '<div class="op"><div class="row2"><div><h3>' + esc(title) + '</h3><div style="color:var(--mute)">' + esc(sub) + '</div></div>' +
+    '<button class="primary" data-buy="' + r.id + '" data-kind="' + kind + '">Buy for $' + Number(r.price).toFixed(2) + '</button></div></div>';
+  const cases = (sc.data || []).map(r => card('case', r, cname(r.case_id), 'A case. You also need a ' + cname(r.case_id) + ' key to open it.')).join('');
+  const keys = (sk.data || []).map(r => card('key', r, cname(r.case_id) + ' Key', 'Opens a ' + cname(r.case_id) + ' case.')).join('');
+  $('shopView').innerHTML = '<h2 style="margin-bottom:1rem">Shop</h2>' + (cases || keys ? (cases ? '<h3>Cases</h3>' + cases : '') + (keys ? '<h3 style="margin-top:1rem">Keys</h3>' + keys : '') : '<p style="color:var(--mute)">Nothing for sale yet.</p>');
 }
 $('shopView').addEventListener('click', async e => {
   const b = e.target.closest('[data-buy]'); if (!b) return;
-  const { error } = await db.rpc('buy_key', { p_listing: b.dataset.buy });
+  const { error } = await db.rpc(b.dataset.kind === 'case' ? 'buy_case' : 'buy_key', { p_listing: b.dataset.buy });
   if (error) return showErr(error.message);
   const ses = await db.auth.getSession(); if (ses.data.session) loadProfile(ses.data.session.user.id);
-  b.textContent = 'Bought!';
+  b.textContent = 'Bought! It is in your inventory.';
+});
+
+// ---------- Inventory ----------
+const COND = w => w < 0.15 ? 'Mint Condition' : w < 0.45 ? 'Mint' : w < 0.75 ? 'Average' : w < 0.95 ? 'Bad' : 'Terrible';
+const RCOL = { gray: '#9aa5ad', 'light blue': '#6fb7ff', blue: '#3b6cf0', purple: '#8a4fe0', pink: '#e04fb8', red: '#e0463a', gold: '#f0b429' };
+let invData = { items: [], inv: [] };
+function patStyle(it, seed) {
+  const fx = it.is_pattern_based && it.pattern_config && it.pattern_config.effect, t = Math.max(1, seed || 1) / 999;
+  if (fx === 'color change') return 'filter:hue-rotate(' + Math.round(t * 360) + 'deg);';
+  if (fx === 'size change') return 'transform:scale(' + (0.7 + t * 0.5).toFixed(2) + ');';
+  if (fx === 'brightness') return 'filter:brightness(' + (0.6 + t * 0.8).toFixed(2) + ');';
+  return '';
+}
+function itemImg(it, seed, h) {
+  if (it.image_url) return '<img src="' + esc(it.image_url) + '" alt="" style="height:' + h + 'px;max-width:100%;object-fit:contain;' + patStyle(it, seed) + '">';
+  return '<div class="pc ' + (it.side === 'black' ? 'b' : 'w') + '" style="height:' + h + 'px;display:grid;place-items:center;font-size:' + h * 0.7 + 'px">' + GLYPH[CURG[it.piece] || 'p'] + '\uFE0E</div>';
+}
+function inspect(it, wear, seed, head) {
+  const col = RCOL[it.rarity] || '#fff';
+  $('inspBox').innerHTML = (head ? '<h2 style="margin-bottom:.6rem">' + esc(head) + '</h2>' : '') + '<div style="overflow:hidden;padding:.6rem">' + itemImg(it, seed, 150) + '</div>' +
+    '<h3 style="font-family:Georgia,serif;color:' + col + ';margin:.4rem 0 0">' + esc(it.name) + '</h3><div style="color:var(--mute)">' + esc(it.description) + '</div>' +
+    '<div class="stat" style="display:flex;justify-content:space-between;padding:.5rem .7rem;margin-top:.6rem;background:#0d1a23;border-radius:8px"><span style="color:var(--mute)">Rarity</span><b style="color:' + col + '">' + esc(it.rarity) + '</b></div>' +
+    '<div class="stat" style="display:flex;justify-content:space-between;padding:.5rem .7rem;margin-top:.4rem;background:#0d1a23;border-radius:8px"><span style="color:var(--mute)">Wear</span><b>' + COND(wear) + ' · ' + Number(wear).toFixed(10) + '</b></div>' +
+    (it.is_pattern_based ? '<div class="stat" style="display:flex;justify-content:space-between;padding:.5rem .7rem;margin-top:.4rem;background:#0d1a23;border-radius:8px"><span style="color:var(--mute)">Pattern</span><b>#' + (seed || 1) + '</b></div>' : '') +
+    '<div class="btns" style="margin-top:1rem"><button class="primary" id="inspClose">Close</button></div>';
+  $('insp').classList.remove('hidden');
+  $('inspClose').onclick = () => $('insp').classList.add('hidden');
+}
+$('insp').addEventListener('click', e => { if (e.target === $('insp')) $('insp').classList.add('hidden'); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('insp').classList.add('hidden'); });
+async function invRender() {
+  const ses = await db.auth.getSession(); if (!ses.data.session) return;
+  const uid = ses.data.session.user.id;
+  const [inv, its, uc, uk, cs] = await Promise.all([db.from('inventory').select('*').eq('owner_id', uid).order('acquired_at', { ascending: false }),
+    db.from('items').select('*'), db.from('user_cases').select('*'), db.from('user_keys').select('*'), db.from('cases').select('*')]);
+  if (view !== 'inv') return;
+  if (inv.error) { $('invView').innerHTML = '<p>Could not load your inventory: ' + esc(inv.error.message) + '</p>'; return; }
+  invData = { items: its.data || [], inv: inv.data || [] };
+  const cname = id => { const c = (cs.data || []).find(x => x.id === id); return c ? c.name : '?'; };
+  const keys = {}; (uk.data || []).forEach(k => { keys[k.case_id] = k.qty; });
+  const cases = (uc.data || []).filter(r => r.qty > 0), keyRows = (uk.data || []).filter(r => r.qty > 0);
+  $('invView').innerHTML = '<h2 style="margin-bottom:.8rem">Inventory</h2>' +
+    '<h3>Cases</h3>' + (cases.map(r => '<div class="op"><div class="row2"><div><b>' + esc(cname(r.case_id)) + '</b> × ' + r.qty + '<br><small style="color:var(--mute)">Keys you have: ' + (keys[r.case_id] || 0) + '</small></div>' +
+      '<button class="primary" data-open="' + r.case_id + '"' + (keys[r.case_id] > 0 ? '' : ' disabled') + '>' + (keys[r.case_id] > 0 ? 'Open' : 'Needs a key') + '</button></div></div>').join('') || '<p style="color:var(--mute)">No cases.</p>') +
+    '<h3 style="margin-top:1rem">Keys</h3>' + (keyRows.map(r => '<div class="op"><b>' + esc(cname(r.case_id)) + ' Key</b> × ' + r.qty + '</div>').join('') || '<p style="color:var(--mute)">No keys.</p>') +
+    '<h3 style="margin-top:1rem">Items (' + invData.inv.length + ')</h3><div class="grid">' + invData.inv.map(r => {
+      const it = invData.items.find(x => x.id === r.item_id); if (!it) return '';
+      return '<div class="card2" data-inv="' + r.id + '" style="border-color:' + (RCOL[it.rarity] || 'var(--line)') + '">' + itemImg(it, r.pattern_seed, 80) + '<b>' + esc(it.name) + '</b><small>' + COND(Number(r.wear)) + '</small></div>'; }).join('') + '</div>';
+}
+$('invView').addEventListener('click', async e => {
+  const o = e.target.closest('[data-open]');
+  if (o) {
+    o.disabled = true;
+    const { data, error } = await db.rpc('open_case', { p_case: o.dataset.open });
+    if (error) { o.disabled = false; return showErr(error.message); }
+    const it = invData.items.find(x => x.id === data.item_id) || { name: data.name, rarity: data.rarity, description: '', image_url: data.image_url, is_pattern_based: !!data.pattern_seed, pattern_config: {} };
+    inspect(it, Number(data.wear), data.pattern_seed, 'You got:');
+    invRender(); return;
+  }
+  const c = e.target.closest('[data-inv]'); if (!c) return;
+  const r = invData.inv.find(x => x.id === c.dataset.inv), it = r && invData.items.find(x => x.id === r.item_id);
+  if (it) inspect(it, Number(r.wear), r.pattern_seed);
 });
 </script>
 </body>
