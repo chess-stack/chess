@@ -45,7 +45,7 @@ main{display:flex;flex-wrap:wrap;gap:1.4rem;justify-content:center;padding:1.4re
 .sq.hint:not(.cap){background-image:radial-gradient(circle,rgba(17,32,43,.38) 0 14%,transparent 15%)}
 .sq.hint.cap{outline:4px solid rgba(17,32,43,.45);outline-offset:-4px}
 nav{display:flex;gap:.5rem;padding:.6rem 1.2rem;border-bottom:1px solid var(--line)}
-#opsView,#shopView,#invView{max-width:820px;margin:0 auto;padding:1.2rem}
+#opsView,#shopView,#invView,#loView{max-width:820px;margin:0 auto;padding:1.2rem}
 .op{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:1rem;margin-bottom:1rem}
 .op.over{opacity:.6}
 .op h3{margin:0;font-family:Georgia,serif}
@@ -106,8 +106,19 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
 .card2 .qty{position:absolute;top:4px;right:6px;background:rgba(0,0,0,.55);border-radius:4px;padding:0 .35rem;font-size:.8rem}
 .card2 button{width:100%;margin-top:.4rem;padding:.3rem}
 .boxph{font-size:3rem;color:#5d7383}
-.wearov{position:absolute;inset:0;pointer-events:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .1 0 0 0 0 .08 0 0 0 0 .06 0 0 0 2.2 -.95'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>"),repeating-linear-gradient(118deg,transparent 0 11px,rgba(235,235,235,.5) 11px 12px,transparent 12px 29px)}
+.wearov{position:absolute;inset:0;pointer-events:none;mix-blend-mode:multiply;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .1 0 0 0 0 .08 0 0 0 0 .06 0 0 0 2.2 -.95'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>"),url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='s'><feTurbulence type='fractalNoise' baseFrequency='.16 .8' numOctaves='2' seed='4'/><feColorMatrix values='0 0 0 0 .3 0 0 0 0 .3 0 0 0 0 .3 0 0 0 10 -6.3'/></filter><rect width='120' height='120' filter='url(%23s)'/></svg>")}
+.wearov.lt{mix-blend-mode:normal;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .1 0 0 0 0 .08 0 0 0 0 .06 0 0 0 2.2 -.95'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>"),url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='s'><feTurbulence type='fractalNoise' baseFrequency='.16 .8' numOctaves='2' seed='4'/><feColorMatrix values='0 0 0 0 .95 0 0 0 0 .95 0 0 0 0 .95 0 0 0 10 -6.3'/></filter><rect width='120' height='120' filter='url(%23s)'/></svg>")}
 .card2 small{color:var(--mute);display:block}
+#roll{position:fixed;inset:0;z-index:28;background:rgba(5,12,18,.9);display:grid;place-items:center;padding:1rem}
+#roll .rbox{width:100%;max-width:900px;text-align:center}
+.rview{position:relative;overflow:hidden;height:168px;background:#0d1a23;border:1px solid var(--line);border-radius:8px;margin-bottom:1rem}
+#rstrip{display:flex;position:absolute;left:0;top:14px;will-change:transform}
+.rc{flex:0 0 132px;height:138px;margin:0 4px;background:#152733;border-radius:6px;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;font-size:.75rem}
+.rc .rci{height:88px;display:grid;place-items:center;overflow:hidden}
+.rc .rcn{padding:0 .3rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rc .rbar{height:6px}
+.rmark{position:absolute;left:50%;top:0;bottom:0;width:3px;margin-left:-1.5px;background:var(--gold);box-shadow:0 0 12px var(--gold);z-index:2}
+.lo .cimg{background:var(--dark);border-radius:4px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -170,6 +181,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
   <section id="opsView" class="hidden"></section>
   <section id="shopView" class="hidden"></section>
   <section id="invView" class="hidden"></section>
+  <section id="loView" class="hidden"></section>
 </section>
 
 <div id="ov" class="hidden" role="dialog" aria-modal="true">
@@ -182,6 +194,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
     <div class="btns"><button class="primary" id="ovAgain">Play again</button><button id="ovClose">Close</button></div>
   </div>
 </div>
+<div id="roll" class="hidden"><div class="rbox"><h2 style="margin-bottom:.8rem">Opening case...</h2><div class="rview"><div id="rstrip"></div><div class="rmark"></div></div><button id="rskip">Skip</button></div></div>
 <div id="insp" class="hidden"><div class="box" id="inspBox"></div></div>
 <div id="dev" class="hidden"><div class="panel">
   <div class="dh"><b>Dev tools</b><span class="btns"><button id="dvTabItems">Items</button><button id="dvTabColls">Collections</button><button id="dvTabCases">Cases</button><button id="dvTabOps">Operations</button><button id="dvTabShop">Shop keys</button><button id="dvTabShopC">Shop cases</button><button id="dvTabMoney">Money</button><button id="dvClose">Close</button></span></div>
@@ -260,6 +273,7 @@ async function route(session) {
   $('botSel').innerHTML = bots.map(b => '<option value="' + b.id + '">' + b.name + ' (' + b.elo + ')</option>').join('');
   render();
   loadOps();
+  loadLoadouts().then(() => render());
 }
 db.auth.onAuthStateChange((_e, session) => setTimeout(() => route(session), 0));
 
@@ -269,7 +283,9 @@ const game = new Chess();
 let sel = null, legal = [], last = [], flipped = false;
 let mode = 'local', myColor = 'w', bots = [], bot = null, botGame = null, thinking = false;
 let profElo = null, devAdmin = false;
-let pre = null, questPly = 0;                                   // queued premove {from,to}
+let pre = null, questPly = 0;
+let eq = { white: {}, black: {} }, loData = { loadouts: [], slots: [], inv: [], items: [], active: 1 }, loTab = 1;
+const T2N = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };                                   // queued premove {from,to}
 let arrows = [], marks = [], drawFrom = null, drawTo = null, drawColor = '#2e9e5b';
 const SVGNS = 'http://www.w3.org/2000/svg';
 const overlay = document.createElementNS(SVGNS, 'svg');
@@ -308,7 +324,9 @@ function render() {
     if (p) {
       const s = document.createElement('span');
       s.className = 'pc ' + p.color;
-      s.textContent = GLYPH[p.type] + '\uFE0E';
+      const e = (mode !== 'bot' || p.color === myColor) ? eq[p.color === 'w' ? 'white' : 'black'][T2N[p.type]] : null;
+      if (e && e.item.image_url) s.innerHTML = itemImg(e.item, e.seed, 'calc(var(--bs) / 8 * .86)', e.wear);
+      else s.textContent = GLYPH[p.type] + '\uFE0E';
       d.appendChild(s);
     }
     b.appendChild(d);
@@ -526,7 +544,7 @@ window.addEventListener('pointermove', e => {
     if (src) {
       drag.size = $('board').clientWidth / 8;
       ghost = src.cloneNode(true);
-      ghost.style.cssText = 'position:fixed;pointer-events:none;z-index:15;display:grid;place-items:center;line-height:1;width:' + drag.size + 'px;height:' + drag.size + 'px;font-size:' + drag.size * 0.72 + 'px';
+      ghost.style.cssText = 'position:fixed;pointer-events:none;z-index:15;display:grid;place-items:center;line-height:1;width:' + drag.size + 'px;height:' + drag.size + 'px;font-size:' + drag.size * 0.72 + 'px;--bs:' + getComputedStyle($('board')).getPropertyValue('--bs');
       document.body.appendChild(ghost);
       src.style.opacity = '.3';
     }
@@ -676,7 +694,7 @@ const PIECES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'];
 const FX = ['none', 'color change', 'size change', 'brightness'];
 const F = {
   items: [['name', 'text'], ['description', 'area'], ['kind', 'sel', KINDS], ['piece', 'sel', PIECES], ['rarity', 'sel', RARITIES], ['side', 'sel', ['both', 'white', 'black']],
-          ['wear_cap', 'num'], ['is_pattern_based', 'chk'], ['pattern_effect', 'pcfg', FX], ['is_default', 'chk'], ['collection_id', 'coll'], ['image_url', 'img']],
+          ['wear_cap', 'num'], ['is_pattern_based', 'chk'], ['pattern_effect', 'pcfg', FX], ['scratch_black', 'pscr'], ['is_default', 'chk'], ['collection_id', 'coll'], ['image_url', 'img'], ['set_images', 'setimgs']],
   collections: [['name', 'text'], ['description', 'area'], ['is_active_drop', 'chk'], ['image_url', 'img']],
   cases: [['name', 'text'], ['description', 'area'], ['collection_id', 'coll'], ['allow_gold', 'chk'], ['image_url', 'img']],
   operations: [['name', 'text'], ['description', 'area'], ['currency_piece', 'sel', PIECES], ['lasts_days', 'dur'], ['image_url', 'img']],
@@ -714,8 +732,14 @@ $('dvTabOps').onclick = () => { devTab = 'operations'; devEdit = null; devRender
 function formHtml(fields, cur, pfx) {
   let f = '';
   for (const [k, type, opts] of fields) {
-    const v = type === 'pcfg' ? (cur.pattern_config || {}).effect : cur[k], id = pfx + k, ida = ' id="' + id + '"';
+    const v = type === 'pcfg' ? (cur.pattern_config || {}).effect : type === 'pscr' ? (cur.pattern_config || {}).scratch_black : cur[k], id = pfx + k, ida = ' id="' + id + '"';
     if (type === 'chk') { f += '<label><input' + ida + ' type="checkbox"' + (v ? ' checked' : '') + '>' + lab(k) + '</label>'; continue; }
+    if (type === 'pscr') { f += '<label><input' + ida + ' type="checkbox"' + (v ? ' checked' : '') + '>allow scratches on black parts</label>'; continue; }
+    if (type === 'setimgs') {
+      f += '<label>set piece images (only used when type is "set")</label>' + PIECES.map(pc => '<label for="' + pfx + 'setimg_' + pc + '" style="margin-top:.2rem">' + pc + '</label><div class="drop" data-for="' + pfx + 'setimg_' + pc + '">' +
+        ((v || {})[pc] ? 'Image set. Drop a new one to replace it.' : 'Drop an image here, or click') + '</div><input id="' + pfx + 'setimg_' + pc + '" type="file" accept="image/*" hidden>').join('');
+      continue;
+    }
     f += '<label for="' + id + '">' + lab(k) + (type === 'num' ? ' (0 to 1)' : '') + '</label>';
     if (type === 'text') f += '<input' + ida + ' value="' + esc(v) + '">';
     else if (type === 'area') f += '<textarea' + ida + ' rows="2">' + esc(v) + '</textarea>';
@@ -764,7 +788,13 @@ async function collect(fields, cur, pfx) {
     if (type === 'chk') row[k] = el.checked;
     else if (type === 'num') row[k] = Math.min(1, Math.max(0, el.value === '' ? 1 : Number(el.value)));
     else if (type === 'dur') row[k] = Math.max(0, Number(el.value) || 0);
-    else if (type === 'pcfg') row.pattern_config = { effect: el.value.trim() };
+    else if (type === 'pcfg') row.pattern_config = Object.assign({}, row.pattern_config, { effect: el.value.trim() });
+    else if (type === 'pscr') row.pattern_config = Object.assign({}, row.pattern_config, { scratch_black: el.checked });
+    else if (type === 'setimgs') {
+      const o = Object.assign({}, cur.set_images || {});
+      for (const pc of PIECES) { const fi = $(pfx + 'setimg_' + pc); if (fi && fi.files[0]) o[pc] = await devUpload(fi.files[0], true); }
+      row.set_images = o;
+    }
     else if (type === 'money') row[k] = Math.max(0, Number(el.value) || 0);
     else if (type === 'int') row[k] = Math.max(k === 'goal' ? 1 : 0, Math.floor(Number(el.value) || 0));
     else if (type === 'coll' || type === 'item' || type === 'case') row[k] = el.value || null;
@@ -873,14 +903,14 @@ async function loadOps() {
   if (view.startsWith('op:') && !ops.find(o => 'op:' + o.id === view)) showView('play'); else navRender();
 }
 function navRender() {
-  $('nav').innerHTML = '<button data-v="play">Play</button><button data-v="inv">Inventory</button>' + ops.map(o => '<button data-v="op:' + o.id + '">' + esc(o.name) + '</button>').join('') + '<button data-v="shop">Shop</button>';
+  $('nav').innerHTML = '<button data-v="play">Play</button><button data-v="inv">Inventory</button><button data-v="lo">Loadout</button>' + ops.map(o => '<button data-v="op:' + o.id + '">' + esc(o.name) + '</button>').join('') + '<button data-v="shop">Shop</button>';
   $('nav').querySelectorAll('button').forEach(b => { b.className = b.dataset.v === view ? 'primary' : ''; });
 }
 $('nav').addEventListener('click', e => { const b = e.target.closest('button'); if (b) showView(b.dataset.v); });
 function showView(v) {
   view = v; navRender();
-  $('playView').classList.toggle('hidden', v !== 'play'); $('opsView').classList.toggle('hidden', !v.startsWith('op:')); $('shopView').classList.toggle('hidden', v !== 'shop'); $('invView').classList.toggle('hidden', v !== 'inv');
-  if (v.startsWith('op:')) opRender(v.slice(3)); else if (v === 'shop') shopRender(); else if (v === 'inv') invRender();
+  $('playView').classList.toggle('hidden', v !== 'play'); $('opsView').classList.toggle('hidden', !v.startsWith('op:')); $('shopView').classList.toggle('hidden', v !== 'shop'); $('invView').classList.toggle('hidden', v !== 'inv'); $('loView').classList.toggle('hidden', v !== 'lo');
+  if (v.startsWith('op:')) opRender(v.slice(3)); else if (v === 'shop') shopRender(); else if (v === 'inv') invRender(); else if (v === 'lo') loadLoadouts().then(loRender);
 }
 function fmtLeft(ms) {
   if (ms <= 0) return 'Ended';
@@ -926,10 +956,12 @@ async function shopRender() {
 }
 $('shopView').addEventListener('click', async e => {
   const b = e.target.closest('[data-buy]'); if (!b) return;
+  const label = b.textContent; b.disabled = true;
   const { error } = await db.rpc(b.dataset.kind === 'case' ? 'buy_case' : 'buy_key', { p_listing: b.dataset.buy });
-  if (error) return showErr(error.message);
+  if (error) { b.disabled = false; return showErr(error.message); }
   const ses = await db.auth.getSession(); if (ses.data.session) loadProfile(ses.data.session.user.id);
-  b.textContent = 'Bought! It is in your inventory.';
+  b.textContent = 'Bought!';
+  setTimeout(() => { b.textContent = label; b.disabled = false; }, 500);
 });
 
 // ---------- Inventory ----------
@@ -943,15 +975,18 @@ function patParts(it, seed) {
   if (fx === 'brightness') return { f: 'brightness(' + (0.6 + t * 0.8).toFixed(2) + ')', t: '' };
   return { f: '', t: '' };
 }
-// wear: 0 = factory fresh, 1 = destroyed. Fades the colors, darkens, and adds grime and scratches over the piece only.
+// wear: 0 = factory fresh, 1 = destroyed. Fades colors, darkens, adds grime and tiny scratches over the piece only.
+// Scratches use multiply, so they never show on black parts, unless the item allows scratching black parts.
 function itemImg(it, seed, h, wear) {
-  const w = Math.max(0, Math.min(1, Number(wear) || 0)), p = patParts(it, seed);
+  const w = Math.max(0, Math.min(1, Number(wear) || 0)), p = patParts(it, seed), hh = typeof h === 'number' ? h + 'px' : h;
   const filt = (p.f ? p.f + ' ' : '') + 'saturate(' + (1 - 0.55 * w).toFixed(2) + ') brightness(' + (1 - 0.3 * w).toFixed(2) + ') contrast(' + (1 - 0.15 * w).toFixed(2) + ')';
   const tf = p.t ? 'transform:' + p.t + ';' : '';
-  if (!it.image_url) return '<div class="pc ' + (it.side === 'black' ? 'b' : 'w') + '" style="height:' + h + 'px;display:grid;place-items:center;font-size:' + h * 0.7 + 'px;filter:' + filt + ';' + tf + '">' + GLYPH[CURG[it.piece] || 'p'] + '\uFE0E</div>';
-  const u = esc(it.image_url), mask = "-webkit-mask:url('" + u + "') center/contain no-repeat;mask:url('" + u + "') center/contain no-repeat;";
-  return '<span style="position:relative;display:inline-block;line-height:0;' + tf + '"><img src="' + u + '" alt="" style="height:' + h + 'px;max-width:100%;object-fit:contain;filter:' + filt + '">' +
-    (w > 0.02 ? '<span class="wearov" style="' + mask + 'opacity:' + Math.min(0.9, w * 1.15).toFixed(2) + '"></span>' : '') + '</span>';
+  const iu = it.image_url || (it.set_images && (it.set_images.pawn || Object.values(it.set_images)[0]));
+  if (!iu) return '<div class="pc ' + (it.side === 'black' ? 'b' : 'w') + '" style="height:' + hh + ';display:grid;place-items:center;font-size:' + (typeof h === 'number' ? h * 0.7 : 40) + 'px;filter:' + filt + ';' + tf + '">' + GLYPH[CURG[it.piece] || 'p'] + '\uFE0E</div>';
+  const u = esc(iu), mask = "-webkit-mask:url('" + u + "') center/contain no-repeat;mask:url('" + u + "') center/contain no-repeat;";
+  const lt = it.pattern_config && it.pattern_config.scratch_black ? ' lt' : '';
+  return '<span style="position:relative;display:inline-block;line-height:0;' + tf + '"><img src="' + u + '" alt="" style="height:' + hh + ';max-width:100%;object-fit:contain;filter:' + filt + '">' +
+    (w > 0.02 ? '<span class="wearov' + lt + '" style="' + mask + 'opacity:' + Math.min(0.9, w * 1.15).toFixed(2) + '"></span>' : '') + '</span>';
 }
 function inspect(it, wear, seed, head) {
   const col = RCOL[it.rarity] || '#fff';
@@ -973,7 +1008,7 @@ async function invRender() {
     db.from('items').select('*'), db.from('user_cases').select('*'), db.from('user_keys').select('*'), db.from('cases').select('*')]);
   if (view !== 'inv') return;
   if (inv.error) { $('invView').innerHTML = '<p>Could not load your inventory: ' + esc(inv.error.message) + '</p>'; return; }
-  invData = { items: its.data || [], inv: inv.data || [] };
+  invData = { items: its.data || [], inv: inv.data || [], cases: cs.data || [] };
   const cname = id => { const c = (cs.data || []).find(x => x.id === id); return c ? c.name : '?'; };
   const keys = {}; (uk.data || []).forEach(k => { keys[k.case_id] = k.qty; });
   const cases = (uc.data || []).filter(r => r.qty > 0), keyRows = (uk.data || []).filter(r => r.qty > 0);
@@ -995,13 +1030,149 @@ $('invView').addEventListener('click', async e => {
     o.disabled = true;
     const { data, error } = await db.rpc('open_case', { p_case: o.dataset.open });
     if (error) { o.disabled = false; return showErr(error.message); }
+    const itemsNow = await db.from('items').select('*'); if (itemsNow.data) invData.items = itemsNow.data;
+    await playCaseRoll(invData.cases.find(x => x.id === o.dataset.open) || {}, data);
     const it = invData.items.find(x => x.id === data.item_id) || { name: data.name, rarity: data.rarity, description: '', image_url: data.image_url, is_pattern_based: !!data.pattern_seed, pattern_config: {} };
     inspect(it, Number(data.wear), data.pattern_seed, 'You got:');
-    invRender(); return;
+    invRender(); loadLoadouts(); return;
   }
   const c = e.target.closest('[data-inv]'); if (!c) return;
   const r = invData.inv.find(x => x.id === c.dataset.inv), it = r && invData.items.find(x => x.id === r.item_id);
   if (it) inspect(it, Number(r.wear), r.pattern_seed);
+});
+
+// ---------- Case opening animation + sounds (made with the browser's own audio, no files needed) ----------
+let actx = null;
+function snd(freq, dur, type, vol, when) {
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    const t = actx.currentTime + (when || 0), o = actx.createOscillator(), g = actx.createGain();
+    o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(vol || 0.1, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + dur + 0.03);
+  } catch (e) { /* no audio available */ }
+}
+const rollTick = () => { snd(1250 + Math.random() * 150, 0.03, 'square', 0.04); snd(300, 0.04, 'sine', 0.05); };
+function revealSound(r) {
+  const seq = { gold: [523, 659, 784, 1047, 1319, 1568], red: [523, 659, 784, 1047], pink: [494, 622, 740], purple: [440, 554], blue: [392, 494] }[r] || [392, 494];
+  seq.forEach((f, i) => snd(f, r === 'gold' ? 0.55 : 0.3, 'triangle', 0.12, i * 0.1));
+  if (r === 'gold') snd(2093, 1, 'sine', 0.05, 0.55);
+}
+function playCaseRoll(c, res) {
+  return new Promise(resolve => {
+    const strip = $('rstrip'), view = document.querySelector('.rview');
+    const pool = invData.items.filter(i => i.collection_id === c.collection_id && ['blue', 'purple', 'pink', 'red'].includes(i.rarity));   // no gold in the filler, ever
+    const win = invData.items.find(i => i.id === res.item_id) || { name: res.name, rarity: res.rarity, image_url: res.image_url, description: '', is_pattern_based: false, pattern_config: {} };
+    const WT = { blue: 80, purple: 16, pink: 3.2, red: 0.64 };
+    const fill = () => { if (!pool.length) return win; let t = 0; pool.forEach(i => { t += WT[i.rarity]; }); let r = Math.random() * t; for (const i of pool) { r -= WT[i.rarity]; if (r < 0) return i; } return pool[0]; };
+    const N = 42, total = 52, step = 140, mystery = win.rarity === 'gold';
+    const cardHtml = (it, seed, wear, hide) => '<div class="rc"><div class="rci">' + (hide ? '<div class="boxph" style="color:#f0b429">?</div>' : itemImg(it, seed, 78, wear)) + '</div><div class="rcn">' +
+      esc(hide ? 'Rare Special Item' : it.name) + '</div><div class="rbar" style="background:' + (RCOL[it.rarity] || RCOL.gray) + '"></div></div>';
+    let h = '';
+    for (let i = 0; i < total; i++) h += i === N ? cardHtml(win, res.pattern_seed, res.wear, mystery) : cardHtml(fill(), 1 + Math.floor(Math.random() * 999), 0.1, false);
+    strip.style.transition = 'none'; strip.style.transform = 'translateX(0)'; strip.innerHTML = h;
+    $('roll').classList.remove('hidden');
+    const vw = view.clientWidth, off = (Math.random() - 0.5) * step * 0.7, finalX = Math.round(vw / 2 - (N * step + step / 2 + off));
+    let fin = false, raf = 0, last = -1;
+    const done = () => {
+      if (fin) return; fin = true; cancelAnimationFrame(raf);
+      const wc = strip.children[N];
+      if (mystery && wc) wc.outerHTML = cardHtml(win, res.pattern_seed, res.wear, false);   // a gold only shows once you land on it
+      revealSound(win.rarity);
+      setTimeout(() => { $('roll').classList.add('hidden'); resolve(); }, 1100);
+    };
+    const loop = () => {
+      let x = 0; try { x = new DOMMatrix(getComputedStyle(strip).transform).m41; } catch (e) { /* ignore */ }
+      const idx = Math.floor((vw / 2 - x) / step);
+      if (idx !== last) { if (last !== -1) rollTick(); last = idx; }
+      raf = requestAnimationFrame(loop);
+    };
+    void strip.offsetWidth;
+    strip.style.transition = 'transform 6.5s cubic-bezier(.08,.6,.1,1)'; strip.style.transform = 'translateX(' + finalX + 'px)';
+    strip.ontransitionend = e => { if (e.propertyName === 'transform') done(); };
+    $('rskip').onclick = () => { strip.style.transition = 'none'; strip.style.transform = 'translateX(' + finalX + 'px)'; done(); };
+    snd(180, 0.25, 'sawtooth', 0.05);
+    raf = requestAnimationFrame(loop);
+  });
+}
+
+// ---------- Loadouts (3 of them, white half + black half, king slot, full-set slot) ----------
+async function loadLoadouts() {
+  const ses = await db.auth.getSession(); if (!ses.data.session) return;
+  const uid = ses.data.session.user.id;
+  let lo = await db.from('loadouts').select('*').eq('owner_id', uid).order('slot');
+  if (lo.error) return;
+  const miss = [1, 2, 3].filter(n => !(lo.data || []).some(l => l.slot === n));
+  if (miss.length) { await db.from('loadouts').insert(miss.map(n => ({ owner_id: uid, slot: n, name: 'Loadout ' + n }))); lo = await db.from('loadouts').select('*').eq('owner_id', uid).order('slot'); }
+  const ids = (lo.data || []).map(l => l.id);
+  const [sl, inv, its, pr] = await Promise.all([ids.length ? db.from('loadout_slots').select('*').in('loadout_id', ids) : { data: [] },
+    db.from('inventory').select('*').eq('owner_id', uid), db.from('items').select('*'), db.from('profiles').select('active_loadout').eq('id', uid).maybeSingle()]);
+  loData = { loadouts: lo.data || [], slots: sl.data || [], inv: inv.data || [], items: its.data || [], active: (pr.data && pr.data.active_loadout) || 1 };
+  buildEq();
+}
+function buildEq() {
+  eq = { white: {}, black: {} };
+  const lo = loData.loadouts.find(l => l.slot === loData.active) || loData.loadouts[0]; if (!lo) return;
+  const get = key => { const s = loData.slots.find(x => x.loadout_id === lo.id && x.slot_key === key); if (!s) return null;
+    const r = loData.inv.find(i => i.id === s.inventory_id), it = r && loData.items.find(i => i.id === r.item_id); return it ? { r, it } : null; };
+  for (const side of ['white', 'black']) {
+    const st = get(side + '_set');
+    if (st) { for (const p of PIECES) { const u = (st.it.set_images || {})[p]; if (u) eq[side][p] = { item: Object.assign({}, st.it, { image_url: u }), seed: st.r.pattern_seed, wear: st.r.wear }; } continue; }
+    for (const p of PIECES) { const g = get(side + '_' + p); if (g && g.it.image_url) eq[side][p] = { item: g.it, seed: g.r.pattern_seed, wear: g.r.wear }; }
+  }
+}
+function loRender() {
+  const lo = loData.loadouts.find(l => l.slot === loTab);
+  if (!lo) { $('loView').innerHTML = '<h2>Loadout</h2><p style="color:var(--mute)">Loadouts are not set up yet. Run the SQL step.</p>'; return; }
+  const cap = t => t[0].toUpperCase() + t.slice(1);
+  const cell = (side, key) => {
+    const s = loData.slots.find(x => x.loadout_id === lo.id && x.slot_key === side + '_' + key);
+    const r = s && loData.inv.find(i => i.id === s.inventory_id), it = r && loData.items.find(i => i.id === r.item_id);
+    const img = it ? itemImg(it, r.pattern_seed, 56, r.wear) : key === 'set' ? '<div class="boxph">∅</div>' : '<div class="pc ' + (side === 'black' ? 'b' : 'w') + '" style="font-size:2.6rem;line-height:1">' + GLYPH[CURG[key]] + '\uFE0E</div>';
+    return '<div class="card2 lo" data-side="' + side + '" data-key="' + key + '" style="cursor:pointer"><div class="cin"><div class="cimg" style="height:64px">' + img + '</div><b>' + (key === 'set' ? 'Full set' : cap(key)) +
+      '</b><small style="color:var(--mute);display:block">' + (it ? esc(it.name) : 'Default') + '</small></div><div class="rbar" style="background:' + (it ? RCOL[it.rarity] || RCOL.gray : 'var(--line)') + '"></div></div>';
+  };
+  const half = side => '<div style="flex:1;min-width:260px"><h3 style="margin-bottom:.5rem">' + cap(side) + ' side</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(105px,1fr))">' +
+    ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn', 'set'].map(k => cell(side, k)).join('') + '</div></div>';
+  $('loView').innerHTML = '<h2 style="margin-bottom:.8rem">Loadout</h2><div class="btns" style="margin-bottom:1rem">' +
+    [1, 2, 3].map(n => '<button data-lo="' + n + '" class="' + (n === loTab ? 'primary' : '') + '">Loadout ' + n + (n === loData.active ? ' ★' : '') + '</button>').join('') +
+    '<button data-active="1"' + (loTab === loData.active ? ' disabled' : '') + '>' + (loTab === loData.active ? 'This one is in use' : 'Use this loadout') + '</button></div>' +
+    '<div style="display:flex;gap:1.2rem;flex-wrap:wrap">' + half('white') + half('black') + '</div>' +
+    '<p style="color:var(--mute);margin-top:1rem">Using a full set clears that side\'s single pieces, and picking a single piece clears the set. Empty slots use the default pieces.</p>';
+}
+function loPick(side, key) {
+  const rows = loData.inv.map(r => ({ r, it: loData.items.find(i => i.id === r.item_id) })).filter(x => x.it && (x.it.side === 'both' || x.it.side === side) &&
+    (key === 'set' ? x.it.kind === 'set' : (x.it.kind === 'piece' && x.it.piece === key)));
+  $('inspBox').innerHTML = '<h3 style="margin-bottom:.6rem">' + side + ' ' + (key === 'set' ? 'full set' : key) + '</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(100px,1fr));max-height:55vh;overflow:auto">' +
+    '<div class="card2" data-pick="" style="cursor:pointer"><div class="cin"><div class="cimg"><div class="boxph">∅</div></div><b>None</b><small style="color:var(--mute);display:block">default</small></div><div class="rbar" style="background:var(--line)"></div></div>' +
+    rows.map(x => '<div class="card2" data-pick="' + x.r.id + '" style="cursor:pointer"><div class="cin"><div class="cimg">' + itemImg(x.it, x.r.pattern_seed, 60, x.r.wear) + '</div><b>' + esc(x.it.name) +
+      '</b><small style="color:var(--mute);display:block">' + COND(Number(x.r.wear)) + '</small></div><div class="rbar" style="background:' + (RCOL[x.it.rarity] || RCOL.gray) + '"></div></div>').join('') + '</div>' +
+    (rows.length ? '' : '<p style="color:var(--mute)">You have nothing that fits this slot.</p>') + '<div class="btns" style="margin-top:1rem"><button id="inspClose">Cancel</button></div>';
+  $('insp').classList.remove('hidden'); $('inspClose').onclick = () => $('insp').classList.add('hidden');
+  $('inspBox').onclick = e => { const c = e.target.closest('[data-pick]'); if (c) { $('insp').classList.add('hidden'); equip(side, key, c.dataset.pick || null); } };
+}
+async function equip(side, key, invId) {
+  const lo = loData.loadouts.find(l => l.slot === loTab); if (!lo) return;
+  try {
+    const del = [];
+    if (invId && key === 'set') PIECES.forEach(p => del.push(side + '_' + p));
+    if (invId && key !== 'set') del.push(side + '_set');
+    if (del.length) { const r = await db.from('loadout_slots').delete().eq('loadout_id', lo.id).in('slot_key', del); if (r.error) throw r.error; }
+    const r2 = invId ? await db.from('loadout_slots').upsert({ loadout_id: lo.id, slot_key: side + '_' + key, inventory_id: invId }, { onConflict: 'loadout_id,slot_key' })
+                     : await db.from('loadout_slots').delete().eq('loadout_id', lo.id).eq('slot_key', side + '_' + key);
+    if (r2.error) throw r2.error;
+  } catch (err) { showErr(err.message); }
+  await loadLoadouts(); loRender(); render();
+}
+$('loView').addEventListener('click', async e => {
+  const t = e.target.closest('[data-lo]'); if (t) { loTab = Number(t.dataset.lo); loRender(); return; }
+  if (e.target.closest('[data-active]')) {
+    const { error } = await db.rpc('set_active_loadout', { p_slot: loTab });
+    if (error) return showErr(error.message);
+    loData.active = loTab; buildEq(); loRender(); render(); return;
+  }
+  const c = e.target.closest('.lo'); if (c) loPick(c.dataset.side, c.dataset.key);
 });
 </script>
 </body>
