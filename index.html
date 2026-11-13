@@ -54,6 +54,22 @@ main{display:flex;flex-wrap:wrap;gap:1.4rem;justify-content:center;padding:1.4re
 #err{position:fixed;left:0;right:0;bottom:0;z-index:9;background:#7a1f16;color:#fff;padding:.8rem 1rem;font-size:.95rem}
 select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px solid var(--line);background:#0d1a23;color:var(--ink)}
 .bot{display:flex;flex-direction:column;gap:.5rem;padding:.9rem;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+#board{position:relative}
+.sq.pre{box-shadow:inset 0 0 0 100px rgba(215,40,40,.55)}
+.bw{--bs:min(92vw,560px);width:var(--bs)}
+.cap{display:flex;align-items:center;flex-wrap:wrap;gap:0;min-height:30px;padding:2px 8px;margin:4px 0;background:#9db3c0;border-radius:4px;font-size:1.25rem;line-height:1.1}
+.cap .pc{font-size:1.25rem;margin-right:-4px}
+.cap .adv{margin-left:12px;font-family:system-ui,sans-serif;font-size:.9rem;font-weight:700;color:#10202b}
+#ov{position:fixed;inset:0;z-index:20;background:rgba(5,12,18,.72);display:grid;place-items:center;padding:1rem}
+#ov .box{width:100%;max-width:400px;background:var(--panel);border:2px solid var(--gold);border-radius:12px;padding:1.6rem;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+#ov h2{font-size:2rem;margin-bottom:.3rem}
+#ov h2.win{color:#5ad28a} #ov h2.loss{color:var(--danger)} #ov h2.draw{color:var(--gold)}
+#ov .sub{color:var(--mute);margin:0 0 1.2rem}
+#ov .stat{display:flex;justify-content:space-between;gap:1rem;padding:.7rem .9rem;margin-top:.5rem;background:#0d1a23;border:1px solid var(--line);border-radius:8px;font-size:1.05rem}
+#ov .stat span{color:var(--mute)}
+#ov .pos{color:#5ad28a} #ov .neg{color:var(--danger)}
+#ov .note{color:var(--mute);font-size:.85rem;margin:.7rem 0 0}
+#ov .btns{margin-top:1.2rem}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -89,7 +105,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
     <button id="btnOut">Log out</button>
   </header>
   <main>
-    <div id="board" aria-label="Chess board"></div>
+    <div class="bw"><div class="cap" id="capTop"></div><div id="board" aria-label="Chess board"></div><div class="cap" id="capBot"></div></div>
     <div class="side">
       <div class="bot">
         <select id="botSel" aria-label="Choose a bot"></select>
@@ -114,6 +130,16 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
   </main>
 </section>
 
+<div id="ov" class="hidden" role="dialog" aria-modal="true">
+  <div class="box">
+    <h2 id="ovTitle"></h2>
+    <p class="sub" id="ovSub"></p>
+    <div class="stat"><span>Money</span><b id="ovMoney"></b></div>
+    <div class="stat"><span>Elo</span><b id="ovElo"></b></div>
+    <p class="note" id="ovNote"></p>
+    <div class="btns"><button class="primary" id="ovAgain">Play again</button><button id="ovClose">Close</button></div>
+  </div>
+</div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <div id="err" class="hidden" role="alert"></div>
 <script>
@@ -173,6 +199,7 @@ async function loadProfile(uid) {
   $('sElo').textContent = Math.round(data.elo) + (data.rating_deviation > 110 ? '?' : '');
   $('sLvl').textContent = data.level;
   $('sBal').textContent = Number(data.balance).toFixed(2);
+  profElo = Number(data.elo);
 }
 
 async function route(session) {
@@ -192,6 +219,14 @@ if (typeof Chess === 'undefined') throw new Error('The chess library did not loa
 const game = new Chess();
 let sel = null, legal = [], last = [], flipped = false;
 let mode = 'local', myColor = 'w', bots = [], bot = null, botGame = null, thinking = false;
+let profElo = null;
+let pre = null;                                   // queued premove {from,to}
+let arrows = [], marks = [], drawFrom = null, drawTo = null, drawColor = '#2e9e5b';
+const SVGNS = 'http://www.w3.org/2000/svg';
+const overlay = document.createElementNS(SVGNS, 'svg');
+overlay.setAttribute('viewBox', '0 0 8 8');
+overlay.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3';
+const VAL = { p: 1, n: 3, b: 3, r: 5, q: 9 };
 const GLYPH = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
 
 function kingSquare(color) {
@@ -218,6 +253,7 @@ function render() {
     if (last.includes(name)) d.classList.add('last');
     if (name === sel) d.classList.add('sel');
     if (name === checked) d.classList.add('chk');
+    if (pre && (name === pre.from || name === pre.to)) d.classList.add('pre');
     const mv = legal.find(m => m.to === name);
     if (mv) d.classList.add('hint', ...(p ? ['cap'] : []));
     if (p) {
@@ -228,6 +264,9 @@ function render() {
     }
     b.appendChild(d);
   }
+  b.appendChild(overlay);
+  drawOverlay();
+  renderMaterial();
   renderStatus();
 }
 
@@ -251,10 +290,144 @@ function renderStatus() {
   $('moves').scrollTop = 1e6;
 }
 
+// ----- captured pieces + material advantage -----
+function renderMaterial() {
+  const capBy = { w: [], b: [] };
+  for (const m of game.history({ verbose: true })) if (m.captured) capBy[m.color].push(m.captured);
+  let w = 0, bl = 0;
+  for (const row of game.board()) for (const p of row) {
+    if (p && p.type !== 'k') { if (p.color === 'w') w += VAL[p.type]; else bl += VAL[p.type]; }
+  }
+  const diff = w - bl;
+  const bottom = flipped ? 'b' : 'w', top = bottom === 'w' ? 'b' : 'w';
+  fillCap('capBot', bottom, capBy[bottom], bottom === 'w' ? diff : -diff);
+  fillCap('capTop', top, capBy[top], top === 'w' ? diff : -diff);
+}
+function fillCap(id, color, list, adv) {
+  const opp = color === 'w' ? 'b' : 'w';
+  list.sort((a, b) => VAL[b] - VAL[a]);
+  $(id).innerHTML = list.map(t => '<span class="pc ' + opp + '">' + GLYPH[t] + '\uFE0E</span>').join('') +
+    (adv > 0 ? '<span class="adv">+' + adv + '</span>' : '');
+}
+
+// ----- right-click arrows and highlights -----
+function xy(sq) {
+  let c = 'abcdefgh'.indexOf(sq[0]), r = 8 - Number(sq[1]);
+  if (flipped) { c = 7 - c; r = 7 - r; }
+  return [c + 0.5, r + 0.5];
+}
+function arrowSvg(a) {
+  const [x1, y1] = xy(a.from), [x2, y2] = xy(a.to);
+  const len = Math.hypot(x2 - x1, y2 - y1), ux = (x2 - x1) / len, uy = (y2 - y1) / len;
+  const sx = x1 + ux * 0.3, sy = y1 + uy * 0.3;
+  const tx = x2 - ux * 0.08, ty = y2 - uy * 0.08;
+  const bx = tx - ux * 0.32, by = ty - uy * 0.32;
+  const px = -uy * 0.18, py = ux * 0.18;
+  return '<line x1="' + sx + '" y1="' + sy + '" x2="' + bx + '" y2="' + by + '" stroke="' + a.color + '" stroke-width="0.15" stroke-linecap="round" opacity="0.85"/>' +
+    '<polygon points="' + tx + ',' + ty + ' ' + (bx + px) + ',' + (by + py) + ' ' + (bx - px) + ',' + (by - py) + '" fill="' + a.color + '" opacity="0.85"/>';
+}
+function drawOverlay() {
+  let h = '';
+  for (const m of marks) {
+    const [x, y] = xy(m.sq);
+    h += '<circle cx="' + x + '" cy="' + y + '" r="0.44" fill="none" stroke="' + m.color + '" stroke-width="0.07" opacity="0.9"/>';
+  }
+  const list = arrows.slice();
+  if (drawFrom && drawTo && drawTo !== drawFrom) list.push({ from: drawFrom, to: drawTo, color: drawColor });
+  for (const a of list) h += arrowSvg(a);
+  overlay.innerHTML = h;
+}
+function clearDrawings() { if (arrows.length || marks.length) { arrows = []; marks = []; drawOverlay(); } }
+function pickColor(e) { return e.shiftKey ? '#e0463a' : (e.ctrlKey || e.altKey || e.metaKey) ? '#3b82d9' : '#2e9e5b'; }
+$('board').addEventListener('contextmenu', e => e.preventDefault());
+$('board').addEventListener('mousedown', e => {
+  if (e.button !== 2) return;
+  const el = e.target.closest('.sq'); if (!el) return;
+  drawFrom = el.dataset.sq; drawTo = null; drawColor = pickColor(e);
+});
+$('board').addEventListener('mousemove', e => {
+  if (!drawFrom) return;
+  const el = e.target.closest('.sq'), t = el ? el.dataset.sq : null;
+  if (t !== drawTo) { drawTo = t; drawOverlay(); }
+});
+window.addEventListener('mouseup', e => {
+  if (e.button !== 2 || !drawFrom) return;
+  const hit = document.elementFromPoint(e.clientX, e.clientY);
+  const sqEl = hit && hit.closest ? hit.closest('.sq') : null;
+  const to = sqEl ? sqEl.dataset.sq : null;
+  if (to === drawFrom) {
+    const i = marks.findIndex(m => m.sq === to && m.color === drawColor);
+    if (i >= 0) marks.splice(i, 1); else marks.push({ sq: to, color: drawColor });
+  } else if (to) {
+    const i = arrows.findIndex(a => a.from === drawFrom && a.to === to);
+    if (i >= 0) arrows.splice(i, 1); else arrows.push({ from: drawFrom, to, color: drawColor });
+  }
+  drawFrom = null; drawTo = null; drawOverlay();
+});
+
+// ----- premoves -----
+function hypoMoves(sq) {
+  // what could my piece do if it were my turn right now (used for premoves)
+  const parts = game.fen().split(' ');
+  parts[1] = myColor; parts[3] = '-';
+  return new Chess(parts.join(' ')).moves({ square: sq, verbose: true });
+}
+function premoveClick(sq) {
+  if (pre) { pre = null; sel = null; legal = []; render(); return; }   // any click cancels
+  if (sel && legal.find(m => m.to === sq)) { pre = { from: sel, to: sq }; sel = null; legal = []; render(); return; }
+  const p = game.get(sq);
+  if (p && p.color === myColor) { sel = sq; legal = hypoMoves(sq); } else { sel = null; legal = []; }
+  render();
+}
+function playPremove() {
+  const pm = pre; pre = null;
+  if (!pm) return false;
+  const ok = game.moves({ square: pm.from, verbose: true }).find(m => m.to === pm.to);
+  if (!ok) return false;                                              // no longer legal: dropped
+  game.move({ from: pm.from, to: pm.to, promotion: 'q' });
+  last = [pm.from, pm.to];
+  return true;
+}
+
+// ----- game over box -----
+function showResult(i) {
+  const win = i.result === 'win', draw = i.result === 'draw';
+  let title;
+  if (i.reason === 'Checkmate') title = win ? 'Checkmate! You win!' : 'Checkmate. You lose.';
+  else if (i.reason === 'You resigned') title = 'You resigned';
+  else title = win ? 'You win!' : draw ? 'Draw' : 'You lose';
+  $('ovTitle').textContent = title;
+  $('ovTitle').className = win ? 'win' : draw ? 'draw' : 'loss';
+  const parts = ['vs ' + (bot ? bot.name : 'bot')];
+  if (i.reason !== 'Checkmate' && i.reason !== 'You resigned') parts.push(i.reason);
+  parts.push(Math.ceil(i.plies / 2) + ' moves');
+  $('ovSub').textContent = parts.join(' · ');
+  if (i.error || i.reward == null) {
+    $('ovMoney').textContent = '-'; $('ovElo').textContent = '-';
+    $('ovNote').textContent = 'The result could not be saved.';
+  } else {
+    $('ovMoney').textContent = '+$' + Number(i.reward).toFixed(2);
+    $('ovMoney').className = Number(i.reward) > 0 ? 'pos' : '';
+    if (i.before != null && i.after != null) {
+      const d = Number(i.after) - Number(i.before);
+      $('ovElo').innerHTML = Math.round(i.before) + ' → ' + Math.round(i.after) + ' <span class="' + (d >= 0 ? 'pos' : 'neg') + '">(' + (d >= 0 ? '+' : '') + d.toFixed(1) + ')</span>';
+    } else $('ovElo').textContent = Math.round(i.after);
+    $('ovNote').textContent = (i.result === 'loss' && Number(i.reward) === 0) ? 'Losses only pay money after 25 moves.' : '';
+  }
+  $('ov').classList.remove('hidden');
+}
+$('ovClose').onclick = () => $('ov').classList.add('hidden');
+$('ov').addEventListener('click', e => { if (e.target === $('ov')) $('ov').classList.add('hidden'); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('ov').classList.add('hidden'); });
+$('ovAgain').onclick = () => { $('ov').classList.add('hidden'); $('btnBot').click(); };
+
 $('board').addEventListener('click', e => {
+  clearDrawings();                       // left click removes arrows and highlights
   const el = e.target.closest('.sq');
-  if (!el || game.game_over() || (mode === 'bot' && (thinking || game.turn() !== myColor))) return;
+  if (!el || game.game_over()) return;
   const sq = el.dataset.sq;
+  if (mode === 'bot' && botGame && game.turn() !== myColor) { premoveClick(sq); return; }
+  if (mode === 'bot' && thinking) return;
   const target = legal.find(m => m.to === sq);
   let moved = false;
   if (sel && target) {
@@ -272,8 +445,9 @@ $('board').addEventListener('click', e => {
 $('btnNew').onclick = async () => {
   if (mode === 'bot' && botGame && !game.game_over()) {
     if (!confirm('Leaving this bot game counts as a loss. Continue?')) return;
-    await finish('loss');
+    await finish('loss', 'You left the game', true);
   }
+  pre = null; clearDrawings(); $('ov').classList.add('hidden');
   mode = 'local'; flipped = false; game.reset(); sel = null; legal = []; last = []; render();
 };
 $('btnUndo').onclick = () => { if (mode === 'bot') return; game.undo(); sel = null; legal = []; last = []; render(); };
@@ -332,6 +506,8 @@ async function botTurn() {
     }
     game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
     last = [uci.slice(0, 2), uci.slice(2, 4)];
+    sel = null; legal = [];
+    if (pre && !game.game_over()) playPremove(); else pre = null;
   } catch (err) { showErr(err.message); }
   thinking = false; render(); afterMove();
 }
@@ -342,14 +518,19 @@ async function afterMove() {
   else if (game.turn() !== myColor) botTurn();
 }
 
-async function finish(result) {
+async function finish(result, reason, quiet) {
   const id = botGame; if (!id) return;
-  botGame = null;
+  botGame = null; pre = null;
   if (!result) result = game.in_checkmate() ? (game.turn() === myColor ? 'loss' : 'win') : 'draw';
-  const { error } = await db.rpc('finish_bot_game', { p_game_id: id, p_result: result, p_plies: game.history().length });
+  if (!reason) reason = game.in_checkmate() ? 'Checkmate' : game.in_stalemate() ? 'Stalemate' : game.in_threefold_repetition() ? 'Draw by repetition' : game.insufficient_material() ? 'Not enough pieces' : 'Draw';
+  const plies = game.history().length, before = profElo;
+  const { data, error } = await db.rpc('finish_bot_game', { p_game_id: id, p_result: result, p_plies: plies });
   if (error) showErr(error.message);
-  const { data } = await db.auth.getSession();
-  if (data.session) loadProfile(data.session.user.id);
+  const after = data && data.elo != null ? Number(data.elo) : null;
+  if (after != null) profElo = after;
+  const ses = await db.auth.getSession();
+  if (ses.data.session) loadProfile(ses.data.session.user.id);
+  if (!quiet) showResult({ result, reason, plies, reward: data ? data.reward : null, before, after, error: !!error });
 }
 
 $('btnBot').onclick = async () => {
@@ -359,7 +540,7 @@ $('btnBot').onclick = async () => {
   if (c === 'random') c = Math.random() < 0.5 ? 'white' : 'black';
   const { data, error } = await db.rpc('start_bot_game', { p_bot_id: b.id, p_color: c });
   if (error) return showErr(error.message);
-  game.reset(); sel = null; legal = []; last = [];
+  game.reset(); sel = null; legal = []; last = []; pre = null; clearDrawings(); $('ov').classList.add('hidden');
   mode = 'bot'; bot = b; botGame = data; myColor = c === 'white' ? 'w' : 'b'; flipped = c === 'black';
   render();
   if (game.turn() !== myColor) botTurn();
@@ -369,7 +550,7 @@ $('btnResign').onclick = async () => {
   if (mode !== 'bot' || !botGame || game.game_over()) return;
   const early = game.history().length < 50;
   if (!confirm('Resign this game? It counts as a loss.' + (early ? ' Resigning before move 25 earns no money.' : ''))) return;
-  await finish('loss');
+  await finish('loss', 'You resigned');
   mode = 'local'; render();
   $('status').textContent = 'You resigned.';
 };
