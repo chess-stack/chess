@@ -280,15 +280,28 @@ $('btnUndo').onclick = () => { if (mode === 'bot') return; game.undo(); sel = nu
 $('btnFlip').onclick = () => { flipped = !flipped; render(); };
 
 // ---------- Stockfish (runs in the browser; files live in the /stockfish folder) ----------
-const SF_PATH = 'stockfish/stockfish-18-lite-single.js';
+const SF_PATH = 'stockfish/stockfish-19-lite-single.js';
+const SF_WASM = SF_PATH.replace(/\.js$/, '.wasm');
 let engineP = null;
+async function checkFile(p) {
+  const url = new URL(p, location.href).href;
+  try {
+    const r = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+    return r.ok ? null : 'the site answered "' + r.status + ' not found" for ' + url;
+  } catch (e) { return 'could not reach ' + url; }
+}
 function startEngine() {
-  if (!engineP) engineP = new Promise((res, rej) => {
-    const w = new Worker(SF_PATH);
-    w.onerror = () => { engineP = null; rej(new Error('Stockfish files not found. Put the two Stockfish files in a folder named "stockfish" in your GitHub repo.')); };
-    w.onmessage = e => { const t = String(e.data); if (t === 'uciok') w.postMessage('isready'); if (t === 'readyok') res(w); };
-    w.postMessage('uci');
-  });
+  if (!engineP) engineP = (async () => {
+    const bad = (await checkFile(SF_PATH)) || (await checkFile(SF_WASM));
+    if (bad) throw new Error('Stockfish file problem: ' + bad + '. The file name and folder must match exactly (capital letters count).');
+    return new Promise((res, rej) => {
+      const w = new Worker(SF_PATH);
+      const timer = setTimeout(() => rej(new Error('Stockfish took too long to start.')), 20000);
+      w.onerror = ev => { clearTimeout(timer); rej(new Error('Stockfish found but failed to start: ' + (ev.message || 'unknown error'))); };
+      w.onmessage = e => { const t = String(e.data); if (t === 'uciok') w.postMessage('isready'); if (t === 'readyok') { clearTimeout(timer); res(w); } };
+      w.postMessage('uci');
+    });
+  })().catch(err => { engineP = null; throw err; });
   return engineP;
 }
 async function engineMove(fen, b) {
