@@ -39,7 +39,7 @@ main{display:flex;flex-wrap:wrap;gap:1.4rem;justify-content:center;padding:1.4re
 .sq{position:relative;display:grid;place-items:center;cursor:pointer;overflow:hidden;min-width:0;min-height:0;font-size:calc(var(--bs) / 8 * .72);line-height:1}
 .sq.l{background:var(--light)} .sq.d{background:var(--dark)}
 .sq.last{box-shadow:inset 0 0 0 100px rgba(240,180,41,.28)}
-.sq.sel{background-image:radial-gradient(circle,rgba(240,180,41,.3) 0 58%,var(--gold) 59% 68%,transparent 69%)}
+.sq.sel{background-image:radial-gradient(circle,rgba(46,158,91,.3) 0 58%,#2e9e5b 59% 68%,transparent 69%)}
 .sq.chk{box-shadow:inset 0 0 0 100px rgba(255,90,70,.55)}
 .sq .pc{position:relative;z-index:1}
 .sq.hint:not(.cap){background-image:radial-gradient(circle,rgba(17,32,43,.38) 0 14%,transparent 15%)}
@@ -96,7 +96,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
 #dev .drop.on{border-color:var(--gold);color:var(--ink)}
 #devMsg{margin-top:.6rem;min-height:1.2rem;color:var(--gold)}
 #insp{position:fixed;inset:0;z-index:25;background:rgba(5,12,18,.8);display:grid;place-items:center;padding:1rem}
-#insp .box{width:100%;max-width:380px;background:var(--panel);border:2px solid var(--gold);border-radius:12px;padding:1.4rem;text-align:center}
+#insp .box{position:relative;width:100%;max-width:380px;background:var(--panel);border:2px solid var(--gold);border-radius:12px;padding:1.4rem;text-align:center}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:.7rem}
 .card2{position:relative;background:#0d1a23;border:1px solid var(--line);border-radius:6px;text-align:center;overflow:hidden;font-size:.85rem}
 .card2 .cin{padding:.5rem .4rem .4rem}
@@ -119,6 +119,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
 .rc .rbar{height:6px}
 .rmark{position:absolute;left:50%;top:0;bottom:0;width:3px;margin-left:-1.5px;background:var(--gold);box-shadow:0 0 12px var(--gold);z-index:2}
 .lo .cimg{background:var(--dark);border-radius:4px}
+.colimg{position:absolute;top:10px;left:10px;width:46px;height:46px;object-fit:contain;border-radius:6px;background:rgba(0,0,0,.35);padding:3px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -325,7 +326,7 @@ function render() {
       const s = document.createElement('span');
       s.className = 'pc ' + p.color;
       const e = (mode !== 'bot' || p.color === myColor) ? eq[p.color === 'w' ? 'white' : 'black'][T2N[p.type]] : null;
-      if (e && e.item.image_url) s.innerHTML = itemImg(e.item, e.seed, 'calc(var(--bs) / 8 * .86)', e.wear);
+      if (e && e.item.image_url) s.innerHTML = itemImg(e.item, e.seed, 'calc(var(--bs) / 8 * .72)', e.wear);
       else s.textContent = GLYPH[p.type] + '\uFE0E';
       d.appendChild(s);
     }
@@ -855,8 +856,9 @@ $('devBody').addEventListener('click', async e => {
     if (a === 'cancel') { devEdit = null; return devRender(); }
     if (a === 'edit') { devEdit = devRows.find(r => r.id === id); return devRender(); }
     if (a === 'del' || a === 'delq' || a === 'dels') {
-      if (!confirm('Delete this?')) return;
-      const { error } = await db.from(a === 'del' ? devTab : a === 'delq' ? 'operation_quests' : 'operation_shop').delete().eq('id', id);
+      const wipe = a === 'del' && devTab === 'items';
+      if (!confirm(wipe ? 'Delete this item from the whole game? It is removed from EVERY player\'s inventory and loadouts, and this cannot be undone.' : 'Delete this?')) return;
+      const { error } = wipe ? await db.rpc('dev_delete_item', { p_item: id }) : await db.from(a === 'del' ? devTab : a === 'delq' ? 'operation_quests' : 'operation_shop').delete().eq('id', id);
       if (error) throw error;
       if (a === 'del') devEdit = null;
       devMsg('Deleted.'); return devRender();
@@ -967,7 +969,8 @@ $('shopView').addEventListener('click', async e => {
 // ---------- Inventory ----------
 const COND = w => w < 0.15 ? 'Mint Condition' : w < 0.45 ? 'Mint' : w < 0.75 ? 'Average' : w < 0.95 ? 'Bad' : 'Terrible';
 const RCOL = { gray: '#9aa5ad', 'light blue': '#6fb7ff', blue: '#3b6cf0', purple: '#8a4fe0', pink: '#e04fb8', red: '#e0463a', gold: '#f0b429' };
-let invData = { items: [], inv: [] };
+let invData = { items: [], inv: [] }, colls = [];
+const colImg = it => { const c = colls.find(x => x.id === it.collection_id); return c && c.image_url ? '<img class="colimg" src="' + esc(c.image_url) + '" alt="' + esc(c.name) + '" title="' + esc(c.name) + '">' : ''; };
 function patParts(it, seed) {
   const fx = it.is_pattern_based && it.pattern_config && it.pattern_config.effect, t = Math.max(1, seed || 1) / 999;
   if (fx === 'color change') return { f: 'hue-rotate(' + Math.round(t * 360) + 'deg)', t: '' };
@@ -990,7 +993,7 @@ function itemImg(it, seed, h, wear) {
 }
 function inspect(it, wear, seed, head) {
   const col = RCOL[it.rarity] || '#fff';
-  $('inspBox').innerHTML = (head ? '<h2 style="margin-bottom:.6rem">' + esc(head) + '</h2>' : '') + '<div style="overflow:hidden;padding:.6rem">' + itemImg(it, seed, 150, wear) + '</div>' +
+  $('inspBox').innerHTML = colImg(it) + (head ? '<h2 style="margin-bottom:.6rem">' + esc(head) + '</h2>' : '') + '<div style="overflow:hidden;padding:.6rem">' + itemImg(it, seed, 150, wear) + '</div>' +
     '<h3 style="font-family:Georgia,serif;color:' + col + ';margin:.4rem 0 0">' + esc(it.name) + '</h3><div style="color:var(--mute)">' + esc(it.description) + '</div>' +
     '<div class="stat" style="display:flex;justify-content:space-between;padding:.5rem .7rem;margin-top:.6rem;background:#0d1a23;border-radius:8px"><span style="color:var(--mute)">Rarity</span><b style="color:' + col + '">' + esc(it.rarity) + '</b></div>' +
     '<div class="stat" style="display:flex;justify-content:space-between;padding:.5rem .7rem;margin-top:.4rem;background:#0d1a23;border-radius:8px"><span style="color:var(--mute)">Wear</span><b>' + COND(wear) + ' · ' + Number(wear).toFixed(10) + '</b></div>' +
@@ -1002,6 +1005,7 @@ function inspect(it, wear, seed, head) {
 $('insp').addEventListener('click', e => { if (e.target === $('insp')) $('insp').classList.add('hidden'); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') $('insp').classList.add('hidden'); });
 async function invRender() {
+  db.from('collections').select('id,name,image_url').then(r => { colls = r.data || []; });
   const ses = await db.auth.getSession(); if (!ses.data.session) return;
   const uid = ses.data.session.user.id;
   const [inv, its, uc, uk, cs] = await Promise.all([db.from('inventory').select('*').eq('owner_id', uid).order('acquired_at', { ascending: false }),
