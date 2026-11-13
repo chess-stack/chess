@@ -9,7 +9,7 @@
   --bg:#11202b; --panel:#182d3b; --line:#2b465a; --ink:#e9f0f3; --mute:#8fa7b6;
   --light:#e6ecef; --dark:#6f8ea3; --gold:#f0b429; --danger:#ff7a6b;
 }
-*{box-sizing:border-box}
+*,*::before,*::after{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
 h1,h2{font-family:Georgia,"Times New Roman",serif;font-weight:700;margin:0}
 button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:.6rem 1rem;border-radius:6px}
@@ -41,7 +41,8 @@ main{display:flex;flex-wrap:wrap;gap:1.4rem;justify-content:center;padding:1.4re
 .sq.last{box-shadow:inset 0 0 0 100px rgba(240,180,41,.28)}
 .sq.sel{box-shadow:inset 0 0 0 4px var(--gold)}
 .sq.chk{box-shadow:inset 0 0 0 100px rgba(255,90,70,.55)}
-.sq.hint::after{content:"";position:absolute;width:28%;height:28%;border-radius:50%;background:rgba(17,32,43,.35)}
+.sq .pc{position:relative;z-index:1}
+.sq.hint::after{content:"";pointer-events:none;z-index:0;position:absolute;width:28%;height:28%;border-radius:50%;background:rgba(17,32,43,.35)}
 .sq.hint.cap::after{width:88%;height:88%;background:none;border:4px solid rgba(17,32,43,.4)}
 .pc.w{color:#fff;text-shadow:0 0 2px #000,0 0 2px #000,0 0 2px #000}
 .pc.b{color:#14202a}
@@ -70,6 +71,21 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
 #ov .pos{color:#5ad28a} #ov .neg{color:var(--danger)}
 #ov .note{color:var(--mute);font-size:.85rem;margin:.7rem 0 0}
 #ov .btns{margin-top:1.2rem}
+#board{touch-action:none}
+#dev{position:fixed;inset:0;z-index:30;background:rgba(5,12,18,.8);display:grid;place-items:center;padding:1rem}
+#dev .panel{background:var(--panel);border:2px solid var(--gold);border-radius:12px;padding:1.2rem;width:100%;max-width:760px;max-height:92vh;overflow:auto}
+#dev .dh{display:flex;justify-content:space-between;gap:.6rem;flex-wrap:wrap;align-items:center;margin-bottom:.8rem}
+#dev label{display:block;margin-top:.6rem;color:var(--mute);font-size:.85rem;text-transform:capitalize}
+#dev textarea{font:inherit;width:100%;padding:.5rem;border-radius:6px;border:1px solid var(--line);background:#0d1a23;color:var(--ink)}
+#dev input[type=checkbox]{width:auto;margin-right:.4rem}
+#dev .sec{margin-top:1.2rem;padding:.9rem;border:1px solid var(--line);border-radius:10px;background:rgba(0,0,0,.15)}
+#dev .li{display:flex;gap:.7rem;align-items:center;padding:.5rem;margin-top:.4rem;background:#0d1a23;border:1px solid var(--line);border-radius:8px}
+#dev .li img{width:40px;height:40px;object-fit:contain;background:#233;border-radius:4px}
+#dev .li div{flex:1;min-width:0} #dev .li small{color:var(--mute)}
+#dev .li button{padding:.3rem .6rem}
+#dev .drop{border:2px dashed var(--line);border-radius:8px;padding:.8rem;text-align:center;color:var(--mute);cursor:pointer;margin-top:.3rem}
+#dev .drop.on{border-color:var(--gold);color:var(--ink)}
+#devMsg{margin-top:.6rem;min-height:1.2rem;color:var(--gold)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -102,6 +118,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
       <span>Level <b id="sLvl">-</b></span>
       <span>Balance <b id="sBal">-</b></span>
     </div>
+    <button id="btnDev" class="hidden">Dev tools</button>
     <button id="btnOut">Log out</button>
   </header>
   <main>
@@ -140,6 +157,10 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
     <div class="btns"><button class="primary" id="ovAgain">Play again</button><button id="ovClose">Close</button></div>
   </div>
 </div>
+<div id="dev" class="hidden"><div class="panel">
+  <div class="dh"><b>Dev tools</b><span class="btns"><button id="dvTabItems">Items</button><button id="dvTabColls">Collections / cases</button><button id="dvTabOps">Operations</button><button id="dvClose">Close</button></span></div>
+  <div id="devBody"></div><div id="devMsg"></div>
+</div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <div id="err" class="hidden" role="alert"></div>
 <script>
@@ -192,7 +213,7 @@ $('btnOut').onclick = () => db.auth.signOut();
 $('pass').addEventListener('keydown', e => { if (e.key === 'Enter') auth('login'); });
 
 async function loadProfile(uid) {
-  const { data } = await db.from('profiles').select('username,balance,elo,level,rating_deviation').eq('id', uid).single();
+  const { data } = await db.from('profiles').select('username,balance,elo,level,rating_deviation,is_admin').eq('id', uid).single();
   if (!data) return;
   $('sName').textContent = data.username;
   // A "?" means the rating is still settling (high rating deviation)
@@ -200,6 +221,8 @@ async function loadProfile(uid) {
   $('sLvl').textContent = data.level;
   $('sBal').textContent = Number(data.balance).toFixed(2);
   profElo = Number(data.elo);
+  devAdmin = !!data.is_admin;
+  $('btnDev').classList.toggle('hidden', !devAdmin);
 }
 
 async function route(session) {
@@ -219,7 +242,7 @@ if (typeof Chess === 'undefined') throw new Error('The chess library did not loa
 const game = new Chess();
 let sel = null, legal = [], last = [], flipped = false;
 let mode = 'local', myColor = 'w', bots = [], bot = null, botGame = null, thinking = false;
-let profElo = null;
+let profElo = null, devAdmin = false;
 let pre = null;                                   // queued premove {from,to}
 let arrows = [], marks = [], drawFrom = null, drawTo = null, drawColor = '#2e9e5b';
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -421,7 +444,9 @@ $('ov').addEventListener('click', e => { if (e.target === $('ov')) $('ov').class
 document.addEventListener('keydown', e => { if (e.key === 'Escape') $('ov').classList.add('hidden'); });
 $('ovAgain').onclick = () => { $('ov').classList.add('hidden'); $('btnBot').click(); };
 
+let suppressClick = false;
 $('board').addEventListener('click', e => {
+  if (suppressClick) return;
   clearDrawings();                       // left click removes arrows and highlights
   const el = e.target.closest('.sq');
   if (!el || game.game_over()) return;
@@ -441,6 +466,57 @@ $('board').addEventListener('click', e => {
   render();
   if (moved) afterMove();
 });
+
+// ----- drag a piece to move it (clicking still works) -----
+let drag = null, ghost = null;
+function squareAt(x, y) { const el = document.elementFromPoint(x, y), q = el && el.closest ? el.closest('.sq') : null; return q ? q.dataset.sq : null; }
+function trySelect(sq) {
+  const p = game.get(sq);
+  if (!p || game.game_over()) return false;
+  if (mode === 'bot' && botGame && game.turn() !== myColor) {            // premove drag
+    if (p.color !== myColor) return false;
+    sel = sq; legal = hypoMoves(sq); return true;
+  }
+  if (mode === 'bot' && thinking) return false;
+  if (p.color !== game.turn()) return false;
+  sel = sq; legal = game.moves({ square: sq, verbose: true }); return true;
+}
+function endDrag() { if (ghost) { ghost.remove(); ghost = null; } drag = null; }
+$('board').addEventListener('pointerdown', e => {
+  if (e.button !== 0 || pre || game.game_over()) return;
+  const el = e.target.closest('.sq');
+  if (el && el.querySelector('.pc')) drag = { sq: el.dataset.sq, x: e.clientX, y: e.clientY, on: false };
+});
+window.addEventListener('pointermove', e => {
+  if (!drag) return;
+  if (!drag.on) {
+    if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
+    clearDrawings();
+    if (!trySelect(drag.sq)) { drag = null; return; }
+    drag.on = true; render();
+    const src = document.querySelector('.sq[data-sq="' + drag.sq + '"] .pc');
+    if (src) {
+      drag.size = $('board').clientWidth / 8;
+      ghost = src.cloneNode(true);
+      ghost.style.cssText = 'position:fixed;pointer-events:none;z-index:15;display:grid;place-items:center;line-height:1;width:' + drag.size + 'px;height:' + drag.size + 'px;font-size:' + drag.size * 0.72 + 'px';
+      document.body.appendChild(ghost);
+      src.style.opacity = '.3';
+    }
+  }
+  if (ghost) { ghost.style.left = (e.clientX - drag.size / 2) + 'px'; ghost.style.top = (e.clientY - drag.size / 2) + 'px'; }
+});
+window.addEventListener('pointerup', e => {
+  if (!drag) return;
+  const d = drag; endDrag();
+  if (!d.on) return;
+  suppressClick = true; setTimeout(() => { suppressClick = false; }, 0);
+  const to = squareAt(e.clientX, e.clientY);
+  if (!(to && to !== d.sq && legal.find(m => m.to === to))) { sel = null; legal = []; render(); return; }
+  if (mode === 'bot' && botGame && game.turn() !== myColor) { pre = { from: d.sq, to }; sel = null; legal = []; render(); return; }
+  game.move({ from: d.sq, to, promotion: 'q' });
+  last = [d.sq, to]; sel = null; legal = []; render(); afterMove();
+});
+window.addEventListener('pointercancel', () => { if (drag && drag.on) { sel = null; legal = []; render(); } endDrag(); });
 
 $('btnNew').onclick = async () => {
   if (mode === 'bot' && botGame && !game.game_over()) {
@@ -554,6 +630,144 @@ $('btnResign').onclick = async () => {
   mode = 'local'; render();
   $('status').textContent = 'You resigned.';
 };
+
+// ---------- Dev tool (only shows for admin accounts; Supabase enforces is_admin on every save) ----------
+const KINDS = ['piece', 'set', 'charm', 'board', 'clock skin', 'username effect', 'win effect', 'loss effect', 'checkmate effect', 'draw effect', 'flair'];
+const RARITIES = ['gray', 'light blue', 'blue', 'purple', 'pink', 'red', 'gold'];
+const F = {
+  items: [['name', 'text'], ['description', 'area'], ['kind', 'sel', KINDS], ['rarity', 'sel', RARITIES], ['side', 'sel', ['both', 'white', 'black']],
+          ['wear_cap', 'num'], ['pattern_based', 'chk'], ['pattern_effect', 'text'], ['collection_id', 'coll'], ['image_url', 'img']],
+  collections: [['name', 'text'], ['description', 'area'], ['appears_as', 'sel', ['shop case', 'operation', 'reward case', 'reward skins']], ['image_url', 'img']],
+  operations: [['name', 'text'], ['description', 'area'], ['image_url', 'img']],
+  operation_quests: [['name', 'text'], ['description', 'area'], ['goal', 'int'], ['reward_pawns', 'int'], ['reward_item_id', 'item'], ['reward_collection_id', 'coll']],
+  operation_shop: [['item_id', 'item'], ['collection_id', 'coll'], ['cost_pawns', 'int']]
+};
+const TITLE = { items: 'item', collections: 'collection / case', operations: 'operation' };
+let devOpen = false, devTab = 'items', devEdit = null, devRows = [], devItems = [], devColls = [];
+const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const lab = k => k.replace(/_id$/, '').replace(/_/g, ' ');
+const devMsg = (t, bad) => { $('devMsg').style.color = bad ? 'var(--danger)' : 'var(--gold)'; $('devMsg').textContent = t || ''; };
+function devErr(err) {
+  const m = err.message || String(err);
+  devMsg(/row-level security|permission|policy/i.test(m) ? 'Not allowed: this account is not an admin in Supabase.' :
+         /does not exist|schema cache|relation/i.test(m) ? 'A database table is missing. Run the SQL step first. (' + m + ')' : m, true);
+}
+$('btnDev').onclick = () => { if (!devAdmin) return; devOpen = true; devEdit = null; $('dev').classList.remove('hidden'); devRender(); };
+$('dvClose').onclick = () => { devOpen = false; $('dev').classList.add('hidden'); };
+$('dvTabItems').onclick = () => { devTab = 'items'; devEdit = null; devRender(); };
+$('dvTabColls').onclick = () => { devTab = 'collections'; devEdit = null; devRender(); };
+$('dvTabOps').onclick = () => { devTab = 'operations'; devEdit = null; devRender(); };
+
+function formHtml(fields, cur, pfx) {
+  let f = '';
+  for (const [k, type, opts] of fields) {
+    const v = cur[k], id = pfx + k, ida = ' id="' + id + '"';
+    if (type === 'chk') { f += '<label><input' + ida + ' type="checkbox"' + (v ? ' checked' : '') + '>' + lab(k) + '</label>'; continue; }
+    f += '<label for="' + id + '">' + lab(k) + (type === 'num' ? ' (0 to 1)' : '') + '</label>';
+    if (type === 'text') f += '<input' + ida + ' value="' + esc(v) + '">';
+    else if (type === 'area') f += '<textarea' + ida + ' rows="2">' + esc(v) + '</textarea>';
+    else if (type === 'num') f += '<input' + ida + ' type="number" min="0" max="1" step="0.01" value="' + (v == null ? 1 : v) + '">';
+    else if (type === 'int') f += '<input' + ida + ' type="number" min="0" step="1" value="' + (v == null ? (k === 'goal' ? 1 : 0) : v) + '">';
+    else if (type === 'img') f += '<div class="drop" data-for="' + id + '">' + (v ? 'Image set. Drop a new one to replace it.' : 'Drop an image here, or click') + '</div><input' + ida + ' type="file" accept="image/*" hidden>' +
+      (v ? '<img src="' + esc(v) + '" alt="" style="height:48px;margin-top:.4rem">' : '');
+    else {
+      const list = type === 'coll' ? [['', '(none)']].concat(devColls.map(c => [c.id, c.name])) :
+                   type === 'item' ? [['', '(none)']].concat(devItems.map(c => [c.id, c.name])) : opts.map(o => [o, o]);
+      f += '<select' + ida + '>' + list.map(o => '<option value="' + esc(o[0]) + '"' + (String(v == null ? '' : v) === String(o[0]) ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') + '</select>';
+    }
+  }
+  return f;
+}
+async function devUpload(file) {
+  const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+  const path = crypto.randomUUID() + '.' + ext;
+  const { error } = await db.storage.from('item-images').upload(path, file, { contentType: file.type });
+  if (error) throw error;
+  return db.storage.from('item-images').getPublicUrl(path).data.publicUrl;
+}
+async function collect(fields, cur, pfx) {
+  const row = {};
+  for (const [k, type] of fields) {
+    const el = $(pfx + k);
+    if (type === 'chk') row[k] = el.checked;
+    else if (type === 'num') row[k] = Math.min(1, Math.max(0, el.value === '' ? 1 : Number(el.value)));
+    else if (type === 'int') row[k] = Math.max(k === 'goal' ? 1 : 0, Math.floor(Number(el.value) || 0));
+    else if (type === 'coll' || type === 'item') row[k] = el.value || null;
+    else if (type === 'img') row[k] = el.files[0] ? await devUpload(el.files[0]) : (cur[k] || null);
+    else row[k] = el.value.trim();
+  }
+  return row;
+}
+const nameOf = (list, id) => { const x = list.find(r => r.id === id); return x ? x.name : '-'; };
+async function devRender() {
+  if (!devOpen) return;
+  for (const [id, t] of [['dvTabItems', 'items'], ['dvTabColls', 'collections'], ['dvTabOps', 'operations']]) $(id).className = devTab === t ? 'primary' : '';
+  const [ci, ii, rr] = await Promise.all([db.from('collections').select('*').order('created_at'), db.from('items').select('*').order('created_at'),
+                                          db.from(devTab).select('*').order('created_at', { ascending: false })]);
+  const bad = ci.error || ii.error || rr.error;
+  if (bad) devErr(bad); else devMsg('');
+  devColls = ci.data || []; devItems = ii.data || []; devRows = rr.data || [];
+  const cur = devEdit || {};
+  let h = '<b>' + (devEdit ? 'Editing: ' + esc(cur.name) : 'New ' + TITLE[devTab]) + '</b>' + formHtml(F[devTab], cur, 'dv_') +
+    '<div class="btns" style="margin-top:.8rem"><button class="primary" data-act="save">' + (devEdit ? 'Save changes' : 'Create') + '</button>' + (devEdit ? '<button data-act="cancel">Close editor</button>' : '') + '</div>';
+  if (devTab === 'operations' && devEdit) {
+    const [q, sh] = await Promise.all([db.from('operation_quests').select('*').eq('operation_id', devEdit.id).order('created_at'),
+                                       db.from('operation_shop').select('*').eq('operation_id', devEdit.id).order('created_at')]);
+    if (q.error || sh.error) devErr(q.error || sh.error);
+    h += '<div class="sec"><b>Quests</b>' + (q.data || []).map(r => '<div class="li"><div><b>' + esc(r.name) + '</b><br><small>do ' + r.goal + ' · ' + r.reward_pawns + ' pawns' +
+        (r.reward_item_id ? ' · item: ' + esc(nameOf(devItems, r.reward_item_id)) : '') + (r.reward_collection_id ? ' · case: ' + esc(nameOf(devColls, r.reward_collection_id)) : '') +
+        '</small></div><button data-act="delq" data-id="' + r.id + '">Delete</button></div>').join('') +
+      '<div style="margin-top:.8rem"><b>Add a quest</b>' + formHtml(F.operation_quests, {}, 'qs_') + '<div class="btns" style="margin-top:.6rem"><button data-act="addq">Add quest</button></div></div></div>';
+    h += '<div class="sec"><b>Shop (bought with pawns)</b>' + (sh.data || []).map(r => '<div class="li"><div><b>' + esc(r.item_id ? nameOf(devItems, r.item_id) : nameOf(devColls, r.collection_id)) +
+        '</b><br><small>' + (r.item_id ? 'item' : 'case') + ' · ' + r.cost_pawns + ' pawns</small></div><button data-act="dels" data-id="' + r.id + '">Delete</button></div>').join('') +
+      '<div style="margin-top:.8rem"><b>Add to the shop</b> (pick an item or a case)' + formHtml(F.operation_shop, {}, 'sh_') + '<div class="btns" style="margin-top:.6rem"><button data-act="adds">Add to shop</button></div></div></div>';
+  } else if (devTab === 'operations') h += '<p style="color:var(--mute)">Create the operation first, then its quests and shop appear here.</p>';
+  h += '<hr style="border-color:var(--line);margin:1.2rem 0"><b>' + devRows.length + ' existing</b>' + devRows.map(r => '<div class="li">' + (r.image_url ? '<img src="' + esc(r.image_url) + '" alt="">' : '') +
+    '<div><b>' + esc(r.name) + '</b><br><small>' + esc(devTab === 'items' ? r.kind + ' · ' + r.rarity + ' · ' + r.side : devTab === 'collections' ? r.appears_as : 'operation') + '</small></div>' +
+    '<button data-act="edit" data-id="' + r.id + '">Edit</button><button data-act="del" data-id="' + r.id + '">Delete</button></div>').join('');
+  $('devBody').innerHTML = h;
+}
+$('devBody').addEventListener('click', async e => {
+  const dz = e.target.closest('.drop'); if (dz) { $(dz.dataset.for).click(); return; }
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const a = b.dataset.act, id = b.dataset.id;
+  try {
+    if (a === 'cancel') { devEdit = null; return devRender(); }
+    if (a === 'edit') { devEdit = devRows.find(r => r.id === id); return devRender(); }
+    if (a === 'del' || a === 'delq' || a === 'dels') {
+      if (!confirm('Delete this?')) return;
+      const { error } = await db.from(a === 'del' ? devTab : a === 'delq' ? 'operation_quests' : 'operation_shop').delete().eq('id', id);
+      if (error) throw error;
+      if (a === 'del') devEdit = null;
+      devMsg('Deleted.'); return devRender();
+    }
+    if (a === 'save') {
+      const row = await collect(F[devTab], devEdit || {}, 'dv_');
+      if (!row.name) throw new Error('Give it a name first.');
+      const r = devEdit ? await db.from(devTab).update(row).eq('id', devEdit.id).select().single() : await db.from(devTab).insert(row).select().single();
+      if (r.error) throw r.error;
+      devEdit = devTab === 'operations' ? r.data : null;
+      await devRender(); return devMsg('Saved.');
+    }
+    if (a === 'addq' || a === 'adds') {
+      const t = a === 'addq' ? 'operation_quests' : 'operation_shop', p = a === 'addq' ? 'qs_' : 'sh_';
+      const row = await collect(F[t], {}, p); row.operation_id = devEdit.id;
+      if (t === 'operation_quests' && !row.name) throw new Error('Name the quest first.');
+      if (t === 'operation_shop' && !(row.item_id || row.collection_id)) throw new Error('Pick an item or a case.');
+      const { error } = await db.from(t).insert(row);
+      if (error) throw error;
+      await devRender(); return devMsg('Added.');
+    }
+  } catch (err) { devErr(err); }
+});
+function dropShow(el, files) { const dz = document.querySelector('.drop[data-for="' + el.id + '"]'); if (dz && files[0]) { dz.textContent = 'Ready: ' + files[0].name; dz.classList.add('on'); } }
+$('devBody').addEventListener('change', e => { if (e.target.type === 'file') dropShow(e.target, e.target.files); });
+$('devBody').addEventListener('dragover', e => { if (e.target.closest('.drop')) e.preventDefault(); });
+$('devBody').addEventListener('drop', e => {
+  const dz = e.target.closest('.drop'); if (!dz) return;
+  e.preventDefault();
+  const inp = $(dz.dataset.for); inp.files = e.dataTransfer.files; dropShow(inp, inp.files);
+});
 </script>
 </body>
 </html>
