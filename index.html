@@ -172,7 +172,7 @@ async function loadProfile(uid) {
   // A "?" means the rating is still settling (high rating deviation)
   $('sElo').textContent = Math.round(data.elo) + (data.rating_deviation > 110 ? '?' : '');
   $('sLvl').textContent = data.level;
-  $('sBal').textContent = data.balance;
+  $('sBal').textContent = Number(data.balance).toFixed(2);
 }
 
 async function route(session) {
