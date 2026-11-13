@@ -308,9 +308,10 @@ async function engineMove(fen, b) {
   const w = await startEngine();
   return new Promise(resolve => {
     w.onmessage = e => { const m = /^bestmove (\S+)/.exec(String(e.data)); if (m) resolve(m[1]); };
-    w.postMessage('setoption name Skill Level value ' + b.skill_level);
+    const weak = b.elo < 1200;
+    w.postMessage('setoption name Skill Level value ' + (weak ? 0 : b.skill_level));
     w.postMessage('position fen ' + fen);
-    w.postMessage('go depth ' + b.depth + ' movetime ' + b.movetime_ms);
+    w.postMessage('go depth ' + (weak ? 1 : b.depth) + ' movetime ' + (weak ? 50 : b.movetime_ms));
   });
 }
 
@@ -319,8 +320,16 @@ async function botTurn() {
   const gid = botGame;
   thinking = true; renderStatus();
   try {
-    const uci = await engineMove(game.fen(), bot);
+    // wait a human-like 1-3 seconds so the bot doesn't answer instantly
+    const waitMs = 1000 + Math.random() * 2000;
+    let [uci] = await Promise.all([engineMove(game.fen(), bot), new Promise(r => setTimeout(r, waitMs))]);
     if (botGame !== gid) { thinking = false; return; }
+    // low-rated bots sometimes just play a random legal move (the lower the rating, the more often)
+    if (bot.elo < 1200 && Math.random() < (1200 - bot.elo) / 1200 * 0.95) {
+      const all = game.moves({ verbose: true });
+      const m = all[Math.floor(Math.random() * all.length)];
+      uci = m.from + m.to + (m.promotion || '');
+    }
     game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
     last = [uci.slice(0, 2), uci.slice(2, 4)];
   } catch (err) { showErr(err.message); }
@@ -358,7 +367,8 @@ $('btnBot').onclick = async () => {
 
 $('btnResign').onclick = async () => {
   if (mode !== 'bot' || !botGame || game.game_over()) return;
-  if (!confirm('Resign this game? It counts as a loss.')) return;
+  const early = game.history().length < 50;
+  if (!confirm('Resign this game? It counts as a loss.' + (early ? ' Resigning before move 25 earns no money.' : ''))) return;
   await finish('loss');
   mode = 'local'; render();
   $('status').textContent = 'You resigned.';
