@@ -127,6 +127,11 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
 .clk.on{background:#e8eef2;color:#10202b}
 .clk.low{color:var(--danger)} .clk.on.low{background:#ffd9d4}
 .tc{margin-top:.6rem} .tc label{display:block;font-size:.85rem;color:var(--mute);margin-top:.4rem} .tc .btns button{padding:.3rem .55rem}
+#caseScr{position:fixed;inset:0;z-index:24;background:rgba(9,18,25,.98);overflow:auto}
+#caseScr .cbox{max-width:980px;margin:0 auto;padding:1.2rem 1.2rem 6rem}
+#caseScr .cshead{text-align:center;margin:1rem 0 1.5rem}
+#caseScr .cshead img{max-height:210px;max-width:100%;object-fit:contain}
+#caseScr .csfoot{position:fixed;right:1.2rem;bottom:1rem;display:flex;gap:.9rem;align-items:center;background:var(--panel);border:1px solid var(--line);padding:.6rem .9rem;border-radius:10px;z-index:25}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -165,7 +170,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
   <main id="playView">
     <div class="bw"><div class="caprow"><div class="capstrip" id="capTop"></div><div class="clk hidden" id="clkTop"></div></div><div id="board" aria-label="Chess board"></div><div class="caprow"><div class="capstrip" id="capBot"></div><div class="clk hidden" id="clkBot"></div></div></div>
     <div class="side">
-      <div class="bot">
+      <div class="bot" id="botPanel">
         <select id="botSel" aria-label="Choose a bot"></select>
         <select id="colorSel" aria-label="Choose your side">
           <option value="white">Play as White</option>
@@ -185,7 +190,14 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
       </div>
       <div id="status"></div>
       <div id="moves"></div>
-      <div class="btns">
+      <div id="pzPanel" class="hidden">
+        <h3 style="margin-bottom:.5rem">Ranked puzzles</h3>
+        <div class="stat" style="display:flex;justify-content:space-between;padding:.6rem .8rem;background:#0d1a23;border:1px solid var(--line);border-radius:8px"><span style="color:var(--mute)">Puzzle rating</span><b id="pzRating">-</b></div>
+        <div id="pzMsg" style="min-height:3rem;margin:.6rem 0;color:var(--gold)"></div>
+        <div class="btns"><button id="pzStart" class="primary">Start puzzle</button><button id="pzGive">Give up</button></div>
+        <p style="color:var(--mute);font-size:.85rem;margin-top:.6rem">Ranked: one try per puzzle. A wrong move, giving up, or leaving costs rating. Puzzles are matched to your rating and never repeat.</p>
+      </div>
+      <div class="btns" id="localBtns">
         <button id="btnNew" class="primary">New game</button>
         <button id="btnUndo">Undo</button>
         <button id="btnFlip">Flip board</button>
@@ -208,12 +220,14 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
     <div class="btns"><button class="primary" id="ovAgain">Play again</button><button id="ovClose">Close</button></div>
   </div>
 </div>
+<div id="caseScr" class="hidden"><div class="cbox"><button id="cscClose">← Back to inventory</button><div class="cshead" id="cscHead"></div><div class="grid" id="cscGrid"></div></div><div class="csfoot"><span id="cscKeys" style="color:var(--mute)"></span><button class="primary" id="cscOpen">Open case</button></div></div>
 <div id="roll" class="hidden"><div class="rbox"><h2 style="margin-bottom:.8rem">Opening case...</h2><div class="rview"><div id="rstrip"></div><div class="rmark"></div></div><button id="rskip">Skip</button></div></div>
 <div id="insp" class="hidden"><div class="box" id="inspBox"></div></div>
 <div id="dev" class="hidden"><div class="panel">
-  <div class="dh"><b>Dev tools</b><span class="btns"><button id="dvTabItems">Items</button><button id="dvTabColls">Collections</button><button id="dvTabCases">Cases</button><button id="dvTabOps">Operations</button><button id="dvTabShop">Shop keys</button><button id="dvTabShopC">Shop cases</button><button id="dvTabMoney">Money</button><button id="dvTabNews">News</button><button id="dvClose">Close</button></span></div>
+  <div class="dh"><b>Dev tools</b><span class="btns"><button id="dvTabItems">Items</button><button id="dvTabColls">Collections</button><button id="dvTabCases">Cases</button><button id="dvTabOps">Operations</button><button id="dvTabShop">Shop keys</button><button id="dvTabShopC">Shop cases</button><button id="dvTabMoney">Money</button><button id="dvTabNews">News</button><button id="dvTabPuz">Puzzles</button><button id="dvClose">Close</button></span></div>
   <div id="devBody"></div><div id="devMsg"></div>
 </div></div>
+<script src="https://cdn.jsdelivr.net/npm/fzstd@0.1.1/umd/index.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <div id="err" class="hidden" role="alert"></div>
 <script>
@@ -336,7 +350,7 @@ function idMap() {
   return m;
 }
 function render() {
-  const ids = idMap();
+  const ids = mode === 'puzzle' ? {} : idMap();
   const b = $('board');
   b.innerHTML = '';
   const order = [0, 1, 2, 3, 4, 5, 6, 7];
@@ -358,7 +372,7 @@ function render() {
     if (p) {
       const s = document.createElement('span');
       s.className = 'pc ' + p.color;
-      const e = ids[name] && (mode !== 'bot' || p.color === myColor) ? eq[p.color === 'w' ? 'white' : 'black'][ids[name].split(':')[1]] : null;
+      const e = ids[name] && mode !== 'puzzle' && (mode !== 'bot' || p.color === myColor) ? eq[p.color === 'w' ? 'white' : 'black'][ids[name].split(':')[1]] : null;
       if (e && e.item.image_url) s.innerHTML = itemImg(e.item, e.seed, 'calc(var(--bs) / 8 * .72)', e.wear);
       else s.textContent = GLYPH[p.type] + '\uFE0E';
       d.appendChild(s);
@@ -381,7 +395,8 @@ function renderStatus() {
   else if (game.insufficient_material()) t = 'Draw: not enough pieces.';
   else if (game.in_draw()) t = 'Draw.';
   else t = side + ' to move' + (game.in_check() ? ' (check)' : '');
-  if (mode === 'bot' && !game.game_over()) t = (thinking ? bot.name + ' is thinking...' : 'Your move') + (game.in_check() && !thinking ? ' (check)' : '');
+  if (mode === 'puzzle') t = puz && !puz.over ? (puz.busy ? 'Opponent is moving...' : 'Your move') : '';
+  else if (mode === 'bot' && !game.game_over()) t = (thinking ? bot.name + ' is thinking...' : 'Your move') + (game.in_check() && !thinking ? ' (check)' : '');
   $('status').textContent = t;
   const h = game.history();
   let html = '';
@@ -532,6 +547,7 @@ $('board').addEventListener('click', e => {
   const el = e.target.closest('.sq');
   if (!el || game.game_over()) return;
   const sq = el.dataset.sq;
+  if (mode === 'puzzle' && (!puz || puz.over || puz.busy || game.turn() !== myColor)) return;
   if (mode === 'bot' && botGame && game.turn() !== myColor) { premoveClick(sq); return; }
   if (mode === 'bot' && thinking) return;
   const target = legal.find(m => m.to === sq);
@@ -553,6 +569,7 @@ $('board').addEventListener('click', e => {
 let drag = null, ghost = null;
 function squareAt(x, y) { const el = document.elementFromPoint(x, y), q = el && el.closest ? el.closest('.sq') : null; return q ? q.dataset.sq : null; }
 function trySelect(sq) {
+  if (mode === 'puzzle' && (!puz || puz.over || puz.busy || game.turn() !== myColor)) return false;
   const p = game.get(sq);
   if (!p || game.game_over()) return false;
   if (mode === 'bot' && botGame && game.turn() !== myColor) {            // premove drag
@@ -691,6 +708,7 @@ async function botTurn() {
 }
 
 async function afterMove() {
+  if (mode === 'puzzle') { puzzleAfterMove(); return; }
   if (mode !== 'bot' || !botGame) return;
   clockSync();
   const h = game.history({ verbose: true }), m = h[h.length - 1];
@@ -752,9 +770,9 @@ const PIECES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'];
 const FX = ['none', 'color change', 'size change', 'brightness', 'pattern sheet'];
 const F = {
   items: [['name', 'text'], ['description', 'area'], ['kind', 'sel', KINDS], ['piece', 'sel', PIECES], ['rarity', 'sel', RARITIES], ['side', 'sel', ['both', 'white', 'black']],
-          ['wear_range', 'range'], ['is_pattern_based', 'chk'], ['pattern_effect', 'pcfg', FX], ['scratch_black', 'pscr'], ['pattern_sheet', 'patsheet'], ['sheet_mode', 'psmode'], ['is_default', 'chk'], ['collection_id', 'coll'], ['image_url', 'img'], ['set_images', 'setimgs']],
+          ['wear_range', 'range'], ['brightness', 'bright'], ['is_pattern_based', 'chk'], ['pattern_effect', 'pcfg', FX], ['scratch_black', 'pscr'], ['allow_charms', 'pcharm'], ['pattern_sheet', 'patsheet'], ['sheet_mode', 'psmode'], ['is_default', 'chk'], ['collection_id', 'coll'], ['image_url', 'img'], ['set_images', 'setimgs']],
   collections: [['name', 'text'], ['description', 'area'], ['is_active_drop', 'chk'], ['image_url', 'img']],
-  cases: [['name', 'text'], ['description', 'area'], ['collection_id', 'coll'], ['allow_gold', 'chk'], ['image_url', 'img']],
+  cases: [['name', 'text'], ['description', 'area'], ['collection_id', 'coll'], ['allow_gold', 'chk'], ['image_url', 'img'], ['key_image_url', 'img']],
   operations: [['name', 'text'], ['description', 'area'], ['currency_piece', 'sel', PIECES], ['lasts_days', 'dur'], ['image_url', 'img']],
   operation_quests: [['name', 'text'], ['kind', 'sel', ['win games', 'promote pawns', 'capture pieces', 'give checkmate', 'play games', 'custom']], ['description', 'area'], ['goal', 'int'], ['reward_pawns', 'int'], ['reward_item_id', 'item'], ['reward_case_id', 'case']],
   operation_shop: [['item_id', 'item'], ['case_id', 'case'], ['cost_pawns', 'int']],
@@ -784,6 +802,7 @@ $('dvTabItems').onclick = () => { devTab = 'items'; devEdit = null; devRender();
 $('dvTabColls').onclick = () => { devTab = 'collections'; devEdit = null; devRender(); };
 $('dvTabCases').onclick = () => { devTab = 'cases'; devEdit = null; devRender(); };
 $('dvTabShopC').onclick = () => { devTab = 'shop_cases'; devEdit = null; devRender(); };
+$('dvTabPuz').onclick = () => { devTab = 'puzzles'; devEdit = null; devRender(); };
 $('dvTabNews').onclick = () => { devTab = 'news'; devEdit = null; devRender(); };
 $('dvTabMoney').onclick = () => { devTab = 'money'; devEdit = null; devRender(); };
 $('dvTabShop').onclick = () => { devTab = 'shop_keys'; devEdit = null; devRender(); };
@@ -792,8 +811,14 @@ $('dvTabOps').onclick = () => { devTab = 'operations'; devEdit = null; devRender
 function formHtml(fields, cur, pfx) {
   let f = '';
   for (const [k, type, opts] of fields) {
-    const v = type === 'pcfg' ? (cur.pattern_config || {}).effect : type === 'pscr' ? (cur.pattern_config || {}).scratch_black : type === 'patsheet' ? (cur.pattern_config || {}).sheet_url : type === 'psmode' ? (cur.pattern_config || {}).sheet_mode : cur[k], id = pfx + k, ida = ' id="' + id + '"';
+    const v = type === 'pcfg' ? (cur.pattern_config || {}).effect : type === 'pscr' ? (cur.pattern_config || {}).scratch_black : type === 'patsheet' ? (cur.pattern_config || {}).sheet_url : type === 'psmode' ? (cur.pattern_config || {}).sheet_mode : type === 'pcharm' ? (cur.pattern_config || {}).allow_charms : cur[k], id = pfx + k, ida = ' id="' + id + '"';
     if (type === 'chk') { f += '<label><input' + ida + ' type="checkbox"' + (v ? ' checked' : '') + '>' + lab(k) + '</label>'; continue; }
+    if (type === 'bright') {
+      const bv = (cur.pattern_config || {}).brightness || 1;
+      f += '<label for="' + pfx + k + '">brightness: <b id="brTxt">' + Number(bv).toFixed(2) + '</b> (1.00 = normal)</label><input id="' + pfx + k + '" type="range" min="0.4" max="1.8" step="0.05" value="' + bv + '">';
+      continue;
+    }
+    if (type === 'pcharm') { f += '<label><input' + ida + ' type="checkbox"' + (v === false ? '' : ' checked') + '>charms can be equipped on this item</label>'; continue; }
     if (type === 'psmode') {
       f += '<label for="' + pfx + k + '">pattern sheet replaces</label><select id="' + pfx + k + '"><option value="whites"' + (v === 'all' ? '' : ' selected') + '>Only whites and grays</option><option value="all"' + (v === 'all' ? ' selected' : '') + '>Everything except black</option></select>';
       continue;
@@ -863,6 +888,8 @@ async function collect(fields, cur, pfx) {
     if (type === 'chk') row[k] = el.checked;
     else if (type === 'num') row[k] = Math.min(1, Math.max(0, el.value === '' ? 1 : Number(el.value)));
     else if (type === 'dur') row[k] = Math.max(0, Number(el.value) || 0);
+    else if (type === 'bright') row.pattern_config = Object.assign({}, row.pattern_config, { brightness: Number(el.value) });
+    else if (type === 'pcharm') row.pattern_config = Object.assign({}, row.pattern_config, { allow_charms: el.checked });
     else if (type === 'psmode') row.pattern_config = Object.assign({}, row.pattern_config, { sheet_mode: el.value });
     else if (type === 'patsheet') { const sf = el.files[0]; row.pattern_config = Object.assign({}, row.pattern_config, { sheet_url: sf ? await devUpload(sf, false) : (cur.pattern_config || {}).sheet_url || null }); }
     else if (type === 'range') { row.wear_min = Number($(pfx + 'wear_min').value); row.wear_max = Number($(pfx + 'wear_max').value); row.wear_cap = row.wear_max; }
@@ -883,7 +910,7 @@ async function collect(fields, cur, pfx) {
 }
 const wearText = (lo, hi) => Number(lo).toFixed(2) + ' to ' + Number(hi).toFixed(2) + ' · ' + COND(Number(lo)) + ' to ' + COND(Number(hi));
 $('devBody').addEventListener('input', e => {
-  const id = e.target.id; if (id !== 'dv_wear_min' && id !== 'dv_wear_max') return;
+  const id = e.target.id; if (id === 'dv_brightness') { $('brTxt').textContent = Number(e.target.value).toFixed(2); return; } if (id !== 'dv_wear_min' && id !== 'dv_wear_max') return;
   const a = $('dv_wear_min'), b = $('dv_wear_max');
   if (Number(a.value) > Number(b.value)) { if (id === 'dv_wear_min') b.value = a.value; else a.value = b.value; }
   $('wearTxt').textContent = wearText(a.value, b.value);
@@ -897,8 +924,9 @@ async function devMoney() {
 }
 async function devRender() {
   if (!devOpen) return;
-  for (const [id, t] of [['dvTabItems', 'items'], ['dvTabColls', 'collections'], ['dvTabOps', 'operations'], ['dvTabShop', 'shop_keys'], ['dvTabCases', 'cases'], ['dvTabShopC', 'shop_cases'], ['dvTabMoney', 'money'], ['dvTabNews', 'news']]) $(id).className = devTab === t ? 'primary' : '';
+  for (const [id, t] of [['dvTabItems', 'items'], ['dvTabColls', 'collections'], ['dvTabOps', 'operations'], ['dvTabShop', 'shop_keys'], ['dvTabCases', 'cases'], ['dvTabShopC', 'shop_cases'], ['dvTabMoney', 'money'], ['dvTabNews', 'news'], ['dvTabPuz', 'puzzles']]) $(id).className = devTab === t ? 'primary' : '';
   if (devTab === 'money') return devMoney();
+  if (devTab === 'puzzles') return devPuzzles();
   const [ci, ii, rr, ca] = await Promise.all([db.from('collections').select('*').order('created_at'), db.from('items').select('*').order('created_at'),
                                           db.from(devTab).select('*').order('created_at', { ascending: false }), db.from('cases').select('*').order('created_at')]);
   const bad = ci.error || ii.error || rr.error || ca.error;
@@ -932,6 +960,8 @@ $('devBody').addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const a = b.dataset.act, id = b.dataset.id;
   try {
+    if (a === 'pzstop') { pzStop = true; return; }
+    if (a === 'pzimp') { await puzzleImport(); return; }
     if (a === 'madd' || a === 'msub') {
       const amt = Number($('dv_amt').value);
       if (!(amt > 0)) throw new Error('Enter an amount above 0.');
@@ -992,13 +1022,19 @@ async function loadOps() {
   if (view.startsWith('op:') && !ops.find(o => 'op:' + o.id === view)) showView('play'); else navRender();
 }
 function navRender() {
-  $('nav').innerHTML = '<button data-v="play">Play</button><button data-v="inv">Inventory</button><button data-v="lo">Loadout</button>' + ops.map(o => '<button data-v="op:' + o.id + '">' + esc(o.name) + '</button>').join('') + '<button data-v="shop">Shop</button>';
+  $('nav').innerHTML = '<button data-v="play">Play</button><button data-v="pz">Puzzles</button><button data-v="inv">Inventory</button><button data-v="lo">Loadout</button>' + ops.map(o => '<button data-v="op:' + o.id + '">' + esc(o.name) + '</button>').join('') + '<button data-v="shop">Shop</button>';
   $('nav').querySelectorAll('button').forEach(b => { b.className = b.dataset.v === view ? 'primary' : ''; });
 }
 $('nav').addEventListener('click', e => { const b = e.target.closest('button'); if (b) showView(b.dataset.v); });
 function showView(v) {
+  if (v === 'pz' && view !== 'pz' && mode === 'bot' && botGame) { showErr('Finish or resign your bot game first.'); return; }
+  if (view === 'pz' && v !== 'pz') {
+    if (puz && !puz.over && !confirm('Leaving counts as failing this ranked puzzle. Leave?')) return;
+    puzzleLeave();
+  }
   view = v; navRender();
-  $('playView').classList.toggle('hidden', v !== 'play'); $('opsView').classList.toggle('hidden', !v.startsWith('op:')); $('shopView').classList.toggle('hidden', v !== 'shop'); $('invView').classList.toggle('hidden', v !== 'inv'); $('loView').classList.toggle('hidden', v !== 'lo');
+  if (v === 'pz') puzzleEnter();
+  $('playView').classList.toggle('hidden', v !== 'play' && v !== 'pz'); $('opsView').classList.toggle('hidden', !v.startsWith('op:')); $('shopView').classList.toggle('hidden', v !== 'shop'); $('invView').classList.toggle('hidden', v !== 'inv'); $('loView').classList.toggle('hidden', v !== 'lo');
   if (v.startsWith('op:')) opRender(v.slice(3)); else if (v === 'shop') shopRender(); else if (v === 'inv') invRender(); else if (v === 'lo') loadLoadouts().then(loRender);
 }
 function fmtLeft(ms) {
@@ -1037,10 +1073,12 @@ async function shopRender() {
   const [sc, sk, cs] = await Promise.all([db.from('shop_cases').select('*').order('created_at'), db.from('shop_keys').select('*').order('created_at'), db.from('cases').select('*')]);
   if (view !== 'shop') return;
   const cname = id => { const c = (cs.data || []).find(x => x.id === id); return c ? c.name : '?'; };
-  const card = (kind, r, title, sub) => '<div class="op"><div class="row2"><div><h3>' + esc(title) + '</h3><div style="color:var(--mute)">' + esc(sub) + '</div></div>' +
+  const im = u => u ? '<img src="' + esc(u) + '" alt="" draggable="false" style="height:56px;width:56px;object-fit:contain">' : '';
+  const cobj = id => (cs.data || []).find(x => x.id === id) || {};
+  const card = (kind, r, title, sub, img) => '<div class="op"><div class="row2"><div style="display:flex;gap:.8rem;align-items:center">' + (img || '') + '<div><h3>' + esc(title) + '</h3><div style="color:var(--mute)">' + esc(sub) + '</div></div></div>' +
     '<button class="primary" data-buy="' + r.id + '" data-kind="' + kind + '">Buy for $' + Number(r.price).toFixed(2) + '</button></div></div>';
-  const cases = (sc.data || []).map(r => card('case', r, cname(r.case_id), 'A case. You also need a ' + cname(r.case_id) + ' key to open it.')).join('');
-  const keys = (sk.data || []).map(r => card('key', r, cname(r.case_id) + ' Key', 'Opens a ' + cname(r.case_id) + ' case.')).join('');
+  const cases = (sc.data || []).map(r => card('case', r, cname(r.case_id), 'A case. You also need a ' + cname(r.case_id) + ' key to open it.', im(cobj(r.case_id).image_url))).join('');
+  const keys = (sk.data || []).map(r => card('key', r, cname(r.case_id) + ' Key', 'Opens a ' + cname(r.case_id) + ' case.', im(cobj(r.case_id).key_image_url || cobj(r.case_id).image_url))).join('');
   $('shopView').innerHTML = '<h2 style="margin-bottom:1rem">Shop</h2>' + (cases || keys ? (cases ? '<h3>Cases</h3>' + cases : '') + (keys ? '<h3 style="margin-top:1rem">Keys</h3>' + keys : '') : '<p style="color:var(--mute)">Nothing for sale yet.</p>');
 }
 $('shopView').addEventListener('click', async e => {
@@ -1099,7 +1137,7 @@ function prng(seed) {
 // Scratches use multiply, so they never show on black parts, unless the item allows scratching black parts.
 function itemImg(it, seed, h, wear) {
   const w = Math.max(0, Math.min(1, Number(wear) || 0)), p = patParts(it, seed), hh = typeof h === 'number' ? h + 'px' : h;
-  const pcfg = (it.is_pattern_based && it.pattern_config) || {}, sheetOn = pcfg.effect === 'pattern sheet' && pcfg.sheet_url, filt = (sheetOn && pcfg.sheet_mode === 'all' ? 'brightness(18) ' : '') + (p.f ? p.f + ' ' : '') + 'saturate(' + (1 - 0.55 * w).toFixed(2) + ') brightness(' + (1 - 0.3 * w).toFixed(2) + ') contrast(' + (1 - 0.15 * w).toFixed(2) + ')';
+  const pcfg = (it.is_pattern_based && it.pattern_config) || {}, sheetOn = pcfg.effect === 'pattern sheet' && pcfg.sheet_url, filt = (sheetOn && pcfg.sheet_mode === 'all' ? 'brightness(18) ' : '') + (p.f ? p.f + ' ' : '') + ((it.pattern_config && it.pattern_config.brightness && it.pattern_config.brightness !== 1) ? 'brightness(' + it.pattern_config.brightness + ') ' : '') + 'saturate(' + (1 - 0.55 * w).toFixed(2) + ') brightness(' + (1 - 0.3 * w).toFixed(2) + ') contrast(' + (1 - 0.15 * w).toFixed(2) + ')';
   const tf = p.t ? 'transform:' + p.t + ';' : '';
   const iu = it.image_url || (it.set_images && (it.set_images.pawn || Object.values(it.set_images)[0]));
   if (!iu) return '<div class="pc ' + (it.side === 'black' ? 'b' : 'w') + '" style="height:' + hh + ';display:grid;place-items:center;font-size:' + (typeof h === 'number' ? h * 0.7 : 40) + 'px;filter:' + filt + ';' + tf + '">' + GLYPH[CURG[it.piece] || 'p'] + '\uFE0E</div>';
@@ -1141,32 +1179,21 @@ async function invRender() {
   const cname = id => { const c = (cs.data || []).find(x => x.id === id); return c ? c.name : '?'; };
   const keys = {}; (uk.data || []).forEach(k => { keys[k.case_id] = k.qty; });
   const cases = (uc.data || []).filter(r => r.qty > 0), keyRows = (uk.data || []).filter(r => r.qty > 0);
+  invData.keys = keys; invData.cq = {}; (uc.data || []).forEach(r => { invData.cq[r.case_id] = r.qty; });
   const caseOf = id => (cs.data || []).find(x => x.id === id) || {};
   const typeLabel = it => it.kind === 'piece' ? (it.piece ? it.piece[0].toUpperCase() + it.piece.slice(1) : 'Piece') : (it.kind || 'Item');
   const card = (img, name, sub, color, extra, btn, attrs) => '<div class="card2"' + (attrs || '') + '>' + extra + '<div class="cin"><div class="cimg">' + img + '</div><b>' + esc(name) + '</b><small style="color:var(--mute);display:block">' + esc(sub) + '</small>' + (btn || '') + '</div><div class="rbar" style="background:' + color + '"></div></div>';
+  const keyImg = c => c.key_image_url ? '<img src="' + esc(c.key_image_url) + '" alt="" draggable="false">' : caseImg(c);
   const caseImg = c => c.image_url ? '<img src="' + esc(c.image_url) + '" alt="">' : '<div class="boxph">▣</div>';
   const cardsCases = cases.map(r => { const c = caseOf(r.case_id), k = keys[r.case_id] || 0;
     return card(caseImg(c), c.name || '?', 'Case · ' + k + (k === 1 ? ' key' : ' keys'), RCOL.gray, '<span class="qty">×' + r.qty + '</span>',
-      '<button class="primary" data-open="' + r.case_id + '"' + (k > 0 ? '' : ' disabled') + '>' + (k > 0 ? 'Open' : 'Needs a key') + '</button>'); }).join('');
-  const cardsKeys = keyRows.map(r => { const c = caseOf(r.case_id); return card(caseImg(c), (c.name || '?') + ' Key', 'Key', RCOL.gray, '<span class="qty">×' + r.qty + '</span>'); }).join('');
+      '', ' data-case="' + r.case_id + '" style="cursor:context-menu" title="Right-click to look inside and open"'); }).join('');
+  const cardsKeys = keyRows.map(r => { const c = caseOf(r.case_id); return card(keyImg(c), (c.name || '?') + ' Key', 'Key', RCOL.gray, '<span class="qty">×' + r.qty + '</span>'); }).join('');
   const cardsItems = invData.inv.map(r => { const it = invData.items.find(x => x.id === r.item_id); if (!it) return '';
     return card(itemImg(it, r.pattern_seed, 84, r.wear), it.name, typeLabel(it), RCOL[it.rarity] || RCOL.gray, '', '', ' data-inv="' + r.id + '" style="cursor:pointer"'); }).join('');
-  $('invView').innerHTML = '<h2 style="margin-bottom:.8rem">Inventory</h2>' + ((cardsCases + cardsKeys + cardsItems) ? '<div class="grid">' + cardsCases + cardsKeys + cardsItems + '</div>' : '<p style="color:var(--mute)">Nothing here yet.</p>');
+  $('invView').innerHTML = '<h2 style="margin-bottom:.8rem">Inventory</h2>' + ((cardsCases + cardsKeys + cardsItems) ? '<div class="grid">' + cardsCases + cardsKeys + cardsItems + '</div><p style="color:var(--mute);font-size:.85rem;margin-top:.8rem">Right-click a case to look inside and open it.</p>' : '<p style="color:var(--mute)">Nothing here yet.</p>');
 }
 $('invView').addEventListener('click', async e => {
-  const o = e.target.closest('[data-open]');
-  if (o) {
-    o.disabled = true;
-    const { data, error } = await db.rpc('open_case', { p_case: o.dataset.open });
-    if (error) { o.disabled = false; return showErr(error.message); }
-    const got = await db.from('inventory').select('wear,pattern_seed').eq('id', data.inventory_id).maybeSingle();
-    if (got.data) { data.wear = got.data.wear; data.pattern_seed = got.data.pattern_seed; }
-    const itemsNow = await db.from('items').select('*'); if (itemsNow.data) invData.items = itemsNow.data;
-    await playCaseRoll(invData.cases.find(x => x.id === o.dataset.open) || {}, data);
-    const it = invData.items.find(x => x.id === data.item_id) || { name: data.name, rarity: data.rarity, description: '', image_url: data.image_url, is_pattern_based: !!data.pattern_seed, pattern_config: {} };
-    inspect(it, Number(data.wear), data.pattern_seed, 'You got:');
-    invRender(); loadLoadouts(); return;
-  }
   const c = e.target.closest('[data-inv]'); if (!c) return;
   const r = invData.inv.find(x => x.id === c.dataset.inv), it = r && invData.items.find(x => x.id === r.item_id);
   if (it) inspect(it, Number(r.wear), r.pattern_seed);
@@ -1373,6 +1400,174 @@ function clockFlag(c) {
   finish(lost ? 'loss' : 'win', lost ? 'You ran out of time' : 'Opponent ran out of time').finally(() => { flagging = false; });
 }
 setInterval(renderClocks, 100);
+
+// ---------- Ranked puzzles ----------
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let puz = null, pzStop = false;
+const setPz = (t, bad) => { $('pzMsg').style.color = bad ? 'var(--danger)' : 'var(--gold)'; $('pzMsg').textContent = t || ''; };
+async function pzRefreshRating() {
+  const ses = await db.auth.getSession(); if (!ses.data.session) return;
+  const r = await db.from('profiles').select('puzzle_rating,puzzles_played').eq('id', ses.data.session.user.id).maybeSingle();
+  if (r.error || !r.data) { $('pzRating').textContent = '-'; setPz('Puzzles are not set up yet. Run the SQL step.', true); return; }
+  $('pzRating').textContent = Math.round(r.data.puzzle_rating) + ' (' + r.data.puzzles_played + ' played)';
+}
+function puzzleEnter() {
+  mode = 'puzzle'; puz = null; game.reset(); sel = null; legal = []; last = []; pre = null; flipped = false; clearDrawings();
+  $('botPanel').classList.add('hidden'); $('localBtns').classList.add('hidden'); $('pzPanel').classList.remove('hidden');
+  $('pzStart').textContent = 'Start puzzle'; setPz('Press Start puzzle.');
+  render(); pzRefreshRating();
+}
+function puzzleLeave() {
+  if (puz && !puz.over) puzzleFinish(false, true);
+  mode = 'local'; puz = null; game.reset(); sel = null; legal = []; last = []; pre = null; flipped = false;
+  $('pzPanel').classList.add('hidden'); $('botPanel').classList.remove('hidden'); $('localBtns').classList.remove('hidden');
+  render();
+}
+function playUci(u) { game.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] }); last = [u.slice(0, 2), u.slice(2, 4)]; }
+$('pzStart').onclick = async () => {
+  if (puz && !puz.over) return;
+  $('pzStart').disabled = true; setPz('Finding a puzzle...');
+  const { data, error } = await db.rpc('next_puzzle');
+  $('pzStart').disabled = false;
+  if (error) return setPz(error.message, true);
+  const mv = data.moves.split(' ');
+  puz = { id: data.id, moves: mv, idx: 0, over: false, busy: true };
+  game.load(data.fen); sel = null; legal = []; last = []; pre = null; clearDrawings();
+  myColor = game.turn() === 'w' ? 'b' : 'w'; flipped = myColor === 'b';       // puzzles start one move early: the opponent moves first
+  setPz('Get ready...'); render();
+  await sleep(700);
+  if (!puz || puz.id !== data.id) return;
+  playUci(mv[0]); puz.idx = 1; puz.busy = false;
+  setPz('Find the best move for ' + (myColor === 'w' ? 'White' : 'Black') + '.'); $('pzStart').textContent = 'Next puzzle'; render();
+};
+async function puzzleAfterMove() {
+  if (!puz || puz.over) return;
+  const h = game.history({ verbose: true }), m = h[h.length - 1], exp = puz.moves[puz.idx];
+  if (!m || !exp) return;
+  const ok = m.from + m.to === exp.slice(0, 4) || game.in_checkmate();        // any checkmate counts too
+  if (!ok) {
+    puz.busy = true; game.undo(); render();
+    await puzzleFinish(false); playUci(exp); render(); return;
+  }
+  if (m.from + m.to === exp.slice(0, 4) && (m.promotion || '') !== (exp[4] || '')) { game.undo(); game.move({ from: m.from, to: m.to, promotion: exp[4] }); }
+  puz.idx++;
+  if (puz.idx >= puz.moves.length || game.in_checkmate()) { puz.busy = true; render(); await puzzleFinish(true); render(); return; }
+  puz.busy = true; render(); await sleep(450);
+  if (!puz || puz.over) return;
+  playUci(puz.moves[puz.idx]); puz.idx++; puz.busy = false; setPz('Correct. Keep going.'); render();
+}
+async function puzzleFinish(solved, silent) {
+  if (!puz || puz.over) return;
+  puz.over = true; puz.busy = true;
+  const { data, error } = await db.rpc('finish_puzzle', { p_puzzle: puz.id, p_solved: solved });
+  if (silent) return;
+  if (error) { setPz(error.message, true); return; }
+  setPz((solved ? 'Solved! ' : 'Wrong. The right move is shown. ') + (data.delta >= 0 ? '+' : '') + data.delta + ' rating (now ' + Math.round(data.rating) + '). That puzzle was rated ' + data.puzzle_rating + '.', !solved);
+  pzRefreshRating();
+}
+$('pzGive').onclick = async () => {
+  if (!puz || puz.over || puz.busy) return;
+  if (!confirm('Give up? This counts as a failed ranked puzzle.')) return;
+  const exp = puz.moves[puz.idx];
+  await puzzleFinish(false); playUci(exp); render();
+};
+
+// ---------- Dev: import puzzles straight from the Lichess download (nothing to unzip or install) ----------
+async function devPuzzles() {
+  const c = await db.from('puzzles').select('id', { count: 'exact', head: true });
+  $('devBody').innerHTML = '<b>Puzzles in the game: ' + (c.error ? 'the table is missing, run the SQL step' : c.count) + '</b>' +
+    '<p style="color:var(--mute)">Download <b>lichess_db_puzzle.csv.zst</b> from the Puzzles section of database.lichess.org and pick it here. This page unpacks it for you and keeps an even spread of puzzles across all ratings. Keep this tab open until it finishes.</p>' +
+    '<label for="dv_pzfile">Puzzle file</label><input id="dv_pzfile" type="file" accept=".zst,.csv">' +
+    '<label for="dv_pzmax">How many puzzles to keep</label><input id="dv_pzmax" type="number" min="1000" step="1000" value="30000">' +
+    '<label for="dv_pzpop">Minimum popularity (-100 to 100)</label><input id="dv_pzpop" type="number" value="70">' +
+    '<label for="dv_pzplays">Minimum times played</label><input id="dv_pzplays" type="number" value="300">' +
+    '<div class="btns" style="margin-top:.8rem"><button class="primary" data-act="pzimp">Import</button><button data-act="pzstop">Stop</button></div><div id="pzProg" style="margin-top:.6rem;color:var(--gold)"></div>';
+}
+async function puzzleImport() {
+  const f = $('dv_pzfile').files[0];
+  if (!f) throw new Error('Pick the lichess_db_puzzle.csv.zst file first.');
+  const zst = /\.zst$/i.test(f.name);
+  if (zst && !window.fzstd) throw new Error('The unpacking library did not load. Check your connection and refresh the page.');
+  const maxTotal = Math.max(1000, Number($('dv_pzmax').value) || 30000), minPop = Number($('dv_pzpop').value), minPlays = Number($('dv_pzplays').value);
+  const cap = Math.ceil(maxTotal / 25), counts = {}, batch = [], dec = new TextDecoder();
+  let kept = 0, scanned = 0, sent = 0, carry = '', full = false;
+  pzStop = false;
+  const prog = t => { const el = $('pzProg'); if (el) el.textContent = t; };
+  const feed = bytes => {
+    carry += dec.decode(bytes, { stream: true });
+    const lines = carry.split('\n'); carry = lines.pop();
+    for (const ln of lines) {
+      if (kept >= maxTotal || scanned >= 3000000) { full = true; return; }
+      scanned++;
+      const c = ln.split(',');
+      if (c.length < 8 || c[0] === 'PuzzleId') continue;
+      const rating = parseInt(c[3], 10), rd = parseInt(c[4], 10), pop = parseInt(c[5], 10), plays = parseInt(c[6], 10);
+      if (!(rating > 0) || pop < minPop || plays < minPlays || rd > 110) continue;
+      const bucket = Math.min(2900, Math.max(500, Math.floor(rating / 100) * 100));
+      if ((counts[bucket] || 0) >= cap) continue;
+      counts[bucket] = (counts[bucket] || 0) + 1; kept++;
+      batch.push({ id: c[0], fen: c[1], moves: c[2], rating, themes: c[7], popularity: pop, plays });
+    }
+  };
+  const flush = async () => {
+    while (batch.length >= 500 || (full && batch.length)) {
+      const rows = batch.splice(0, 500), { error } = await db.rpc('dev_import_puzzles', { p_rows: rows });
+      if (error) throw error;
+      sent += rows.length;
+    }
+  };
+  const d = zst ? new fzstd.Decompress(chunk => feed(chunk)) : null;
+  const reader = f.stream().getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (d) d.push(value || new Uint8Array(0), done); else if (value) feed(value);
+    await flush();
+    prog('Scanned ' + scanned.toLocaleString() + ' puzzles, kept ' + kept.toLocaleString() + ', saved ' + sent.toLocaleString() + '...');
+    if (done || full || pzStop) break;
+  }
+  try { await reader.cancel(); } catch (e) { /* ignore */ }
+  full = true; await flush();
+  prog((pzStop ? 'Stopped. ' : 'Done. ') + 'Saved ' + sent.toLocaleString() + ' puzzles.');
+}
+
+// ---------- Case screen (right-click a case in the inventory) ----------
+let csId = null;
+const RANK = { red: 4, pink: 3, purple: 2, blue: 1 };
+function csUpdate() {
+  if (!csId || $('caseScr').classList.contains('hidden')) return;
+  const k = (invData.keys || {})[csId] || 0, q = (invData.cq || {})[csId] || 0, b = $('cscOpen');
+  $('cscKeys').textContent = 'Cases: ' + q + ' · Keys: ' + k;
+  b.disabled = !(k > 0 && q > 0);
+  b.textContent = q < 1 ? 'No case left' : k < 1 ? 'Needs a key' : 'Open case';
+}
+function openCaseScreen(id) {
+  const c = (invData.cases || []).find(x => x.id === id); if (!c) return;
+  csId = id;
+  const mine = invData.items.filter(i => i.collection_id === c.collection_id);
+  const items = mine.filter(i => RANK[i.rarity]).sort((a, b) => RANK[b.rarity] - RANK[a.rarity] || String(a.name).localeCompare(b.name));
+  const gold = c.allow_gold && mine.some(i => i.rarity === 'gold');
+  $('cscHead').innerHTML = (c.image_url ? '<img src="' + esc(c.image_url) + '" alt="" draggable="false">' : '<div class="boxph" style="font-size:6rem">▣</div>') + '<h2 style="margin-top:.6rem">' + esc(c.name) + '</h2><p style="color:var(--mute)">' + esc(c.description) + '</p>';
+  $('cscGrid').innerHTML = items.map(i => '<div class="card2"><div class="cin"><div class="cimg">' + itemImg(i, 1, 78, 0) + '</div><b>' + esc(i.name) + '</b><small style="color:' + RCOL[i.rarity] + ';display:block">' + esc(i.rarity) +
+    '</small></div><div class="rbar" style="background:' + RCOL[i.rarity] + '"></div></div>').join('') +
+    (gold ? '<div class="card2"><div class="cin"><div class="cimg"><div class="boxph" style="color:#f0b429">★</div></div><b>Rare Special Item</b><small style="color:#f0b429;display:block">gold</small></div><div class="rbar" style="background:#f0b429"></div></div>' : '');
+  $('caseScr').classList.remove('hidden'); csUpdate();
+}
+async function doOpenCase(caseId) {
+  const { data, error } = await db.rpc('open_case', { p_case: caseId });
+  if (error) { showErr(error.message); return; }
+  const got = await db.from('inventory').select('wear,pattern_seed').eq('id', data.inventory_id).maybeSingle();
+  if (got.data) { data.wear = got.data.wear; data.pattern_seed = got.data.pattern_seed; }
+  const itemsNow = await db.from('items').select('*'); if (itemsNow.data) invData.items = itemsNow.data;
+  await playCaseRoll(invData.cases.find(x => x.id === caseId) || {}, data);
+  const it = invData.items.find(x => x.id === data.item_id) || { name: data.name, rarity: data.rarity, description: '', image_url: data.image_url, is_pattern_based: !!data.pattern_seed, pattern_config: {} };
+  inspect(it, Number(data.wear), data.pattern_seed, 'You got:');
+  loadLoadouts();
+  await invRender();
+}
+$('invView').addEventListener('contextmenu', e => { const c = e.target.closest('[data-case]'); if (!c) return; e.preventDefault(); openCaseScreen(c.dataset.case); });
+$('cscClose').onclick = () => $('caseScr').classList.add('hidden');
+$('cscOpen').onclick = async () => { $('cscOpen').disabled = true; await doOpenCase(csId); csUpdate(); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('insp').classList.contains('hidden') && $('roll').classList.contains('hidden')) $('caseScr').classList.add('hidden'); });
 </script>
 </body>
 </html>
