@@ -62,6 +62,7 @@ nav{display:flex;gap:.5rem;padding:.6rem 1.2rem;border-bottom:1px solid var(--li
 .btns{display:flex;gap:.5rem;flex-wrap:wrap}
 .btns button{flex:1}
 #err{position:fixed;left:0;right:0;bottom:0;z-index:9;background:#7a1f16;color:#fff;padding:.8rem 1rem;font-size:.95rem}
+input[type=range]{padding:0;border:0;background:transparent;height:1.6rem;accent-color:var(--gold);cursor:pointer}
 select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px solid var(--line);background:#0d1a23;color:var(--ink)}
 .bot{display:flex;flex-direction:column;gap:.5rem;padding:.9rem;background:var(--panel);border:1px solid var(--line);border-radius:8px}
 #board{position:relative}
@@ -649,15 +650,18 @@ async function engineMove(fen, b) {
 // ---------- Bot games ----------
 // how long a person would think: quick in bullet, longer in rapid, fast in the opening and on forced moves, careful with its own clock
 function botDelay(cat) {
-  const n = game.history().length, nm = game.moves().length;
-  const r = ({ bullet: [120, 700], blitz: [400, 2600], rapid: [900, 5500], untimed: [1000, 3000] })[cat];
-  let d = r[0] + Math.pow(Math.random(), 1.6) * (r[1] - r[0]);
-  if (n < 8) d *= 0.5;
-  if (nm <= 2) d *= 0.4;
-  if (game.in_check()) d *= 0.8;
-  if (clock) {
+  const n = game.history().length, nm = game.moves().length, caps = game.moves({ verbose: true }).filter(m => m.captured).length;
+  const scale = ({ bullet: 0.1, blitz: 0.35, rapid: 1, untimed: 0.45 })[cat];
+  // how hard the position is: many options, captures to weigh, or a check = more thinking; obvious moves are quick
+  const hard = Math.min(1, Math.max(0, (nm - 3) / 28) * 0.8 + Math.min(caps, 3) * 0.08 + (game.in_check() ? 0.1 : 0));
+  let d = (1.2 + hard * 18) * (0.55 + Math.random() * 0.9);                       // rapid: ~1s on easy moves, ~15s on tricky ones
+  if (hard > 0.35 && Math.random() < 0.07) d = 22 + Math.random() * 12;           // every so often a long think, up to ~30s+
+  if (n < 10) d *= 0.35;                                                          // opening moves come fast
+  if (nm <= 1) d = 0.6; else if (nm <= 2) d *= 0.4;                               // forced moves
+  d *= scale * 1000;
+  if (clock) {                                                                    // never burn its own clock
     const left = clock.ms[myColor === 'w' ? 'b' : 'w'];
-    d = Math.min(d, left * 0.05 + clock.inc * 0.5);
+    d = Math.min(d, left * 0.05 + clock.inc * 500);
     if (left < 5000) d = Math.min(d, 250);
   }
   return Math.max(60, d);
@@ -1155,6 +1159,8 @@ $('invView').addEventListener('click', async e => {
     o.disabled = true;
     const { data, error } = await db.rpc('open_case', { p_case: o.dataset.open });
     if (error) { o.disabled = false; return showErr(error.message); }
+    const got = await db.from('inventory').select('wear,pattern_seed').eq('id', data.inventory_id).maybeSingle();
+    if (got.data) { data.wear = got.data.wear; data.pattern_seed = got.data.pattern_seed; }
     const itemsNow = await db.from('items').select('*'); if (itemsNow.data) invData.items = itemsNow.data;
     await playCaseRoll(invData.cases.find(x => x.id === o.dataset.open) || {}, data);
     const it = invData.items.find(x => x.id === data.item_id) || { name: data.name, rarity: data.rarity, description: '', image_url: data.image_url, is_pattern_based: !!data.pattern_seed, pattern_config: {} };
