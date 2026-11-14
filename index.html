@@ -138,6 +138,22 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
 .sw .knob::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s}
 .sw input:checked + .knob{background:#2e9e5b}
 .sw input:checked + .knob::after{left:25px}
+.imgboard{background-size:100% 100%;background-repeat:no-repeat}
+.imgboard .sq.l,.imgboard .sq.d{background-color:transparent}
+.nfx-glow{color:var(--nc);text-shadow:0 0 6px var(--nc),0 0 12px var(--nc)}
+.nfx-pulse{color:var(--nc);animation:nfxp 1.6s ease-in-out infinite}
+@keyframes nfxp{50%{text-shadow:0 0 12px var(--nc),0 0 22px var(--nc)}}
+.nfx-rainbow{background:linear-gradient(90deg,#ff4d4d,#ffb84d,#ffee4d,#4dff88,#4da6ff,#b84dff,#ff4d4d);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nfxr 4s linear infinite}
+.nfx-shimmer{background:linear-gradient(90deg,var(--nc) 0,#fff 50%,var(--nc) 100%);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:nfxr 2.5s linear infinite}
+@keyframes nfxr{to{background-position:200% 0}}
+.bwrap{display:flex;gap:8px;align-items:stretch}
+#evalbar{display:none;width:26px;flex:0 0 26px;position:relative;background:#202a31;border-radius:4px;overflow:hidden}
+#evalbar.on{display:block}
+#evalFill{position:absolute;left:0;right:0;bottom:0;height:50%;background:#f1f1f1;transition:height .3s}
+#evalTxt{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font:700 .66rem sans-serif;color:#fff;mix-blend-mode:difference}
+.anline{display:flex;gap:.6rem;align-items:baseline;padding:.35rem .5rem;margin-top:.3rem;background:#0d1a23;border:1px solid var(--line);border-radius:6px;font-size:.85rem}
+.anline b{min-width:3.6rem;color:var(--gold)}
+.anm:hover{color:#fff}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -174,7 +190,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
   </header>
   <nav id="nav"></nav>
   <main id="playView">
-    <div class="bw"><div class="caprow"><div class="capstrip" id="capTop"></div><div class="clk hidden" id="clkTop"></div></div><div id="board" aria-label="Chess board"></div><div class="caprow"><div class="capstrip" id="capBot"></div><div class="clk hidden" id="clkBot"></div></div></div>
+    <div class="bwrap"><div id="evalbar"><div id="evalFill"></div><span id="evalTxt"></span></div><div class="bw"><div class="caprow"><div class="capstrip" id="capTop"></div><div class="clk hidden" id="clkTop"></div></div><div id="board" aria-label="Chess board"></div><div class="caprow"><div class="capstrip" id="capBot"></div><div class="clk hidden" id="clkBot"></div></div></div></div>
     <div class="side">
       <div class="bot" id="botPanel">
         <select id="botSel" aria-label="Choose a bot"></select>
@@ -219,6 +235,16 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
           <p style="color:var(--mute);font-size:.85rem;margin-top:.6rem">Woodpecker Method: solve the same set again and again, each cycle faster. Every cycle's goal is half the time of the one before. Missed puzzles come back at the end of the cycle.</p>
         </div>
         <div id="pzMsg" style="min-height:3rem;margin:.6rem 0;color:var(--gold)"></div>
+      </div>
+      <div id="anPanel" class="hidden">
+        <h3 style="margin-bottom:.5rem">Analysis board</h3>
+        <div class="btns"><button id="anBack">◀</button><button id="anFwd">▶</button><button id="anFlip">Flip</button><button id="anReset">Reset</button></div>
+        <label class="sw"><input type="checkbox" id="anOn" checked><span class="knob"></span><b>Engine</b></label>
+        <div id="anLines"></div>
+        <div id="anMoves" style="margin:.7rem 0;line-height:1.8"></div>
+        <input id="anFen" placeholder="Paste a FEN to load a position">
+        <div class="btns" style="margin-top:.4rem"><button id="anLoad">Load FEN</button><button id="anCopy">Copy FEN</button></div>
+        <p style="color:var(--mute);font-size:.85rem;margin-top:.6rem">Move any piece of either color, in any order. The blue arrow is the engine's best move. Click a move in the list to jump back to it.</p>
       </div>
       <div class="btns" id="localBtns">
         <button id="btnNew" class="primary">New game</button>
@@ -340,6 +366,7 @@ let profElo = null, devAdmin = false;
 let pre = null, questPly = 0;
 let clock = null, curPen = { s: 0, d: 0, t: 1, r: 0 }, flagging = false;
 let ratings = {};
+let eqBoard = { white: null, black: null }, eqFlair = null, eqName = null;
 let eq = { white: {}, black: {} }, loData = { loadouts: [], slots: [], inv: [], items: [], active: 1 }, loTab = 1;
 const T2N = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };                                   // queued premove {from,to}
 let arrows = [], marks = [], drawFrom = null, drawTo = null, drawColor = '#2e9e5b';
@@ -376,7 +403,8 @@ function idMap() {
   return m;
 }
 function render() {
-  const ids = mode === 'puzzle' ? {} : idMap();
+  const ids = (mode === 'puzzle' || mode === 'analysis') ? {} : idMap();
+  applyBoard();
   const b = $('board');
   b.innerHTML = '';
   const order = [0, 1, 2, 3, 4, 5, 6, 7];
@@ -398,7 +426,7 @@ function render() {
     if (p) {
       const s = document.createElement('span');
       s.className = 'pc ' + p.color;
-      const e = ids[name] && mode !== 'puzzle' && (mode !== 'bot' || p.color === myColor) ? eq[p.color === 'w' ? 'white' : 'black'][ids[name].split(':')[1]] : null;
+      const e = ids[name] && mode !== 'puzzle' && mode !== 'analysis' && (mode !== 'bot' || p.color === myColor) ? eq[p.color === 'w' ? 'white' : 'black'][ids[name].split(':')[1]] : null;
       if (e && e.item.image_url) s.innerHTML = itemImg(e.item, e.seed, 'calc(var(--bs) / 8 * .72)', e.wear);
       else s.textContent = GLYPH[p.type] + '\uFE0E';
       d.appendChild(s);
@@ -413,6 +441,7 @@ function render() {
 }
 
 function renderStatus() {
+  if (mode === 'analysis') { anRenderPanel(); return; }
   const side = game.turn() === 'w' ? 'White' : 'Black';
   let t;
   if (game.in_checkmate()) t = 'Checkmate. ' + (side === 'White' ? 'Black' : 'White') + ' wins.';
@@ -476,6 +505,7 @@ function drawOverlay() {
     h += '<circle cx="' + x + '" cy="' + y + '" r="0.44" fill="none" stroke="' + m.color + '" stroke-width="0.07" opacity="0.9"/>';
   }
   const list = arrows.slice();
+  if (mode === 'analysis' && an.arrow) list.push({ from: an.arrow.from, to: an.arrow.to, color: '#3b82d9' });
   if (drawFrom && drawTo && drawTo !== drawFrom) list.push({ from: drawFrom, to: drawTo, color: drawColor });
   for (const a of list) h += arrowSvg(a);
   overlay.innerHTML = h;
@@ -573,6 +603,7 @@ $('board').addEventListener('click', e => {
   const el = e.target.closest('.sq');
   if (!el || game.game_over()) return;
   const sq = el.dataset.sq;
+  if (mode === 'analysis') { anClick(sq); return; }
   if (mode === 'puzzle' && (!puz || puz.over || puz.busy || game.turn() !== myColor)) return;
   if (mode === 'bot' && botGame && game.turn() !== myColor) { premoveClick(sq); return; }
   if (mode === 'bot' && thinking) return;
@@ -596,6 +627,7 @@ let drag = null, ghost = null;
 function squareAt(x, y) { const el = document.elementFromPoint(x, y), q = el && el.closest ? el.closest('.sq') : null; return q ? q.dataset.sq : null; }
 function trySelect(sq) {
   if (mode === 'puzzle' && (!puz || puz.over || puz.busy || game.turn() !== myColor)) return false;
+  if (mode === 'analysis') { const q = game.get(sq); if (!q) return false; sel = sq; legal = anLegal(sq); return true; }
   const p = game.get(sq);
   if (!p || game.game_over()) return false;
   if (mode === 'bot' && botGame && game.turn() !== myColor) {            // premove drag
@@ -637,6 +669,7 @@ window.addEventListener('pointerup', e => {
   suppressClick = true; setTimeout(() => { suppressClick = false; }, 0);
   const to = squareAt(e.clientX, e.clientY);
   if (!(to && to !== d.sq && legal.find(m => m.to === to))) { sel = null; legal = []; render(); return; }
+  if (mode === 'analysis') { anMakeMove(d.sq, to, 'q'); return; }
   if (mode === 'bot' && botGame && game.turn() !== myColor) { pre = { from: d.sq, to }; sel = null; legal = []; render(); return; }
   game.move({ from: d.sq, to, promotion: 'q' });
   last = [d.sq, to]; sel = null; legal = []; render(); afterMove();
@@ -681,9 +714,11 @@ function startEngine() {
 }
 async function engineMove(fen, b) {
   const w = await startEngine();
+  while (an.searching) await new Promise(r => setTimeout(r, 30));      // let the analysis board finish stopping first
   return new Promise(resolve => {
     w.onmessage = e => { const m = /^bestmove (\S+)/.exec(String(e.data)); if (m) resolve(m[1]); };
     const weak = b.elo < 1200;
+    w.postMessage('setoption name MultiPV value 1');
     w.postMessage('setoption name Skill Level value ' + Math.max(0, (weak ? 0 : b.skill_level) - curPen.s));
     w.postMessage('position fen ' + fen);
     w.postMessage('go depth ' + Math.max(1, (weak ? 1 : b.depth) - curPen.d) + ' movetime ' + Math.max(40, Math.round((weak ? 50 : b.movetime_ms) * curPen.t)));
@@ -799,11 +834,11 @@ const PIECES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'];
 const FX = ['none', 'color change', 'size change', 'brightness', 'pattern sheet'];
 const F = {
   items: [['name', 'text'], ['description', 'area'], ['kind', 'sel', KINDS], ['piece', 'sel', PIECES], ['rarity', 'sel', RARITIES], ['side', 'sel', ['both', 'white', 'black']],
-          ['wear_range', 'range'], ['brightness', 'bright'], ['is_pattern_based', 'chk'], ['pattern_effect', 'pcfg', FX], ['scratch_black', 'pscr'], ['allow_charms', 'pcharm'], ['pattern_sheet', 'patsheet'], ['sheet_mode', 'psmode'], ['is_default', 'chk'], ['collection_id', 'coll'], ['image_url', 'img'], ['set_images', 'setimgs']],
+          ['wear_range', 'range'], ['brightness', 'bright'], ['is_pattern_based', 'chk'], ['pattern_effect', 'pcfg', FX], ['scratch_black', 'pscr'], ['allow_charms', 'pcharm'], ['board_light', 'pcol'], ['board_dark', 'pcol'], ['name_fx', 'psel', ['none', 'glow', 'pulse', 'rainbow', 'shimmer']], ['name_color', 'pcol'], ['pattern_sheet', 'patsheet'], ['sheet_mode', 'psmode'], ['is_default', 'chk'], ['collection_id', 'coll'], ['image_url', 'img'], ['set_images', 'setimgs']],
   collections: [['name', 'text'], ['description', 'area'], ['is_active_drop', 'chk'], ['image_url', 'img']],
   cases: [['name', 'text'], ['description', 'area'], ['collection_id', 'coll'], ['allow_gold', 'chk'], ['image_url', 'img'], ['key_image_url', 'img']],
   operations: [['name', 'text'], ['description', 'area'], ['currency_piece', 'sel', PIECES], ['lasts_days', 'dur'], ['image_url', 'img']],
-  operation_quests: [['name', 'text'], ['kind', 'sel', ['win games', 'promote pawns', 'capture pieces', 'give checkmate', 'play games', 'custom']], ['description', 'area'], ['goal', 'int'], ['reward_pawns', 'int'], ['reward_item_id', 'item'], ['reward_case_id', 'case']],
+  operation_quests: [['name', 'text'], ['kind', 'sel', ['win games', 'promote pawns', 'capture pieces', 'give checkmate', 'play games', 'puzzles completed', 'puzzles solved', 'custom']], ['description', 'area'], ['goal', 'int'], ['reward_pawns', 'int'], ['reward_item_id', 'item'], ['reward_case_id', 'case']],
   operation_shop: [['item_id', 'item'], ['case_id', 'case'], ['cost_pawns', 'int']],
   shop_keys: [['case_id', 'case'], ['price', 'money']],
   shop_cases: [['case_id', 'case'], ['price', 'money']],
@@ -840,8 +875,13 @@ $('dvTabOps').onclick = () => { devTab = 'operations'; devEdit = null; devRender
 function formHtml(fields, cur, pfx) {
   let f = '';
   for (const [k, type, opts] of fields) {
-    const v = type === 'pcfg' ? (cur.pattern_config || {}).effect : type === 'pscr' ? (cur.pattern_config || {}).scratch_black : type === 'patsheet' ? (cur.pattern_config || {}).sheet_url : type === 'psmode' ? (cur.pattern_config || {}).sheet_mode : type === 'pcharm' ? (cur.pattern_config || {}).allow_charms : cur[k], id = pfx + k, ida = ' id="' + id + '"';
+    const v = type === 'pcfg' ? (cur.pattern_config || {}).effect : type === 'pscr' ? (cur.pattern_config || {}).scratch_black : type === 'patsheet' ? (cur.pattern_config || {}).sheet_url : type === 'psmode' ? (cur.pattern_config || {}).sheet_mode : type === 'pcharm' ? (cur.pattern_config || {}).allow_charms : (type === 'pcol' || type === 'psel') ? (cur.pattern_config || {})[k] : cur[k], id = pfx + k, ida = ' id="' + id + '"';
     if (type === 'chk') { f += '<label><input' + ida + ' type="checkbox"' + (v ? ' checked' : '') + '>' + lab(k) + '</label>'; continue; }
+    if (type === 'pcol') {
+      const dflt = { board_light: '#e6ecef', board_dark: '#6f8ea3', name_color: '#f0b429' }[k] || '#ffffff';
+      f += '<label for="' + id + '">' + lab(k) + ({ board_light: ' (boards)', board_dark: ' (boards)', name_color: ' (name effects)' }[k] || '') + '</label><input' + ida + ' type="color" value="' + esc(v || dflt) + '" style="height:2.4rem;padding:.2rem">';
+      continue;
+    }
     if (type === 'bright') {
       const bv = (cur.pattern_config || {}).brightness || 1;
       f += '<label for="' + pfx + k + '">brightness: <b id="brTxt">' + Number(bv).toFixed(2) + '</b> (1.00 = normal)</label><input id="' + pfx + k + '" type="range" min="0.4" max="1.8" step="0.05" value="' + bv + '">';
@@ -917,6 +957,7 @@ async function collect(fields, cur, pfx) {
     if (type === 'chk') row[k] = el.checked;
     else if (type === 'num') row[k] = Math.min(1, Math.max(0, el.value === '' ? 1 : Number(el.value)));
     else if (type === 'dur') row[k] = Math.max(0, Number(el.value) || 0);
+    else if (type === 'pcol' || type === 'psel') row.pattern_config = Object.assign({}, row.pattern_config, { [k]: el.value });
     else if (type === 'bright') row.pattern_config = Object.assign({}, row.pattern_config, { brightness: Number(el.value) });
     else if (type === 'pcharm') row.pattern_config = Object.assign({}, row.pattern_config, { allow_charms: el.checked });
     else if (type === 'psmode') row.pattern_config = Object.assign({}, row.pattern_config, { sheet_mode: el.value });
@@ -1051,19 +1092,21 @@ async function loadOps() {
   if (view.startsWith('op:') && !ops.find(o => 'op:' + o.id === view)) showView('play'); else navRender();
 }
 function navRender() {
-  $('nav').innerHTML = '<button data-v="play">Play</button><button data-v="pz">Puzzles</button><button data-v="rt">Ratings</button><button data-v="inv">Inventory</button><button data-v="lo">Loadout</button>' + ops.map(o => '<button data-v="op:' + o.id + '">' + esc(o.name) + '</button>').join('') + '<button data-v="shop">Shop</button>';
+  $('nav').innerHTML = '<button data-v="play">Play</button><button data-v="pz">Puzzles</button><button data-v="rt">Ratings</button><button data-v="an">Analysis</button><button data-v="inv">Inventory</button><button data-v="lo">Loadout</button>' + ops.map(o => '<button data-v="op:' + o.id + '">' + esc(o.name) + '</button>').join('') + '<button data-v="shop">Shop</button>';
   $('nav').querySelectorAll('button').forEach(b => { b.className = b.dataset.v === view ? 'primary' : ''; });
 }
 $('nav').addEventListener('click', e => { const b = e.target.closest('button'); if (b) showView(b.dataset.v); });
 function showView(v) {
-  if (v === 'pz' && view !== 'pz' && mode === 'bot' && botGame) { showErr('Finish or resign your bot game first.'); return; }
+  if ((v === 'pz' || v === 'an') && view !== v && mode === 'bot' && botGame) { showErr('Finish or resign your bot game first.'); return; }
   if (view === 'pz' && v !== 'pz') {
     if (puz && !puz.over && puz.ranked && !confirm('Leaving counts as failing this ranked puzzle. Leave?')) return;
     puzzleLeave();
   }
+  if (view === 'an' && v !== 'an') anLeave();
   view = v; navRender();
   if (v === 'pz') puzzleEnter();
-  $('playView').classList.toggle('hidden', v !== 'play' && v !== 'pz'); $('opsView').classList.toggle('hidden', !v.startsWith('op:')); $('shopView').classList.toggle('hidden', v !== 'shop'); $('invView').classList.toggle('hidden', v !== 'inv'); $('loView').classList.toggle('hidden', v !== 'lo'); $('rtView').classList.toggle('hidden', v !== 'rt');
+  if (v === 'an') anEnter();
+  $('playView').classList.toggle('hidden', v !== 'play' && v !== 'pz' && v !== 'an'); $('opsView').classList.toggle('hidden', !v.startsWith('op:')); $('shopView').classList.toggle('hidden', v !== 'shop'); $('invView').classList.toggle('hidden', v !== 'inv'); $('loView').classList.toggle('hidden', v !== 'lo'); $('rtView').classList.toggle('hidden', v !== 'rt');
   if (v.startsWith('op:')) opRender(v.slice(3)); else if (v === 'shop') shopRender(); else if (v === 'inv') invRender(); else if (v === 'lo') loadLoadouts().then(loRender); else if (v === 'rt') rtRender();
 }
 function fmtLeft(ms) {
@@ -1169,6 +1212,7 @@ function itemImg(it, seed, h, wear) {
   const pcfg = (it.is_pattern_based && it.pattern_config) || {}, sheetOn = pcfg.effect === 'pattern sheet' && pcfg.sheet_url, filt = (sheetOn && pcfg.sheet_mode === 'all' ? 'brightness(18) ' : '') + (p.f ? p.f + ' ' : '') + ((it.pattern_config && it.pattern_config.brightness && it.pattern_config.brightness !== 1) ? 'brightness(' + it.pattern_config.brightness + ') ' : '') + 'saturate(' + (1 - 0.55 * w).toFixed(2) + ') brightness(' + (1 - 0.3 * w).toFixed(2) + ') contrast(' + (1 - 0.15 * w).toFixed(2) + ')';
   const tf = p.t ? 'transform:' + p.t + ';' : '';
   const iu = it.image_url || (it.set_images && (it.set_images.pawn || Object.values(it.set_images)[0]));
+  if (!iu && it.kind === 'board') { const bc = it.pattern_config || {}; return '<div style="width:' + hh + ';height:' + hh + ';border-radius:4px;background:repeating-conic-gradient(' + esc(bc.board_light || '#e6ecef') + ' 0 25%,' + esc(bc.board_dark || '#6f8ea3') + ' 0 50%) 0 0/50% 50%"></div>'; }
   if (!iu) return '<div class="pc ' + (it.side === 'black' ? 'b' : 'w') + '" style="height:' + hh + ';display:grid;place-items:center;font-size:' + (typeof h === 'number' ? h * 0.7 : 40) + 'px;filter:' + filt + ';' + tf + '">' + GLYPH[CURG[it.piece] || 'p'] + '\uFE0E</div>';
   const u = esc(iu), mask = "-webkit-mask:url('" + u + "') center/contain no-repeat;mask:url('" + u + "') center/contain no-repeat;";
   const lt = it.pattern_config && it.pattern_config.scratch_black ? ' lt' : '';
@@ -1299,41 +1343,46 @@ async function loadLoadouts() {
   buildEq();
 }
 const SLOT_KEYS = ['king', 'queen', 'rook_1', 'rook_2', 'bishop_1', 'bishop_2', 'knight_1', 'knight_2'].concat([1, 2, 3, 4, 5, 6, 7, 8].map(n => 'pawn_' + n));
+const slotId = (side, k) => (k === 'flair' || k === 'name_effect') ? k : side + '_' + k;
 const slotName = k => k === 'set' ? 'Full set' : k.replace('_', ' ').replace(/^./, c => c.toUpperCase());
 function buildEq() {
-  eq = { white: {}, black: {} };
+  eq = { white: {}, black: {} }; eqBoard = { white: null, black: null }; eqFlair = null; eqName = null;
   const lo = loData.loadouts.find(l => l.slot === loData.active) || loData.loadouts[0]; if (!lo) return;
   const get = key => { const s = loData.slots.find(x => x.loadout_id === lo.id && x.slot_key === key); if (!s) return null;
     const r = loData.inv.find(i => i.id === s.inventory_id), it = r && loData.items.find(i => i.id === r.item_id); return it ? { r, it } : null; };
   for (const side of ['white', 'black']) {
+    const bd = get(side + '_board'); if (bd) eqBoard[side] = bd.it;
     const st = get(side + '_set');
     if (st) { for (const k of SLOT_KEYS) { const u = (st.it.set_images || {})[k.split('_')[0]]; if (u) eq[side][k] = { item: Object.assign({}, st.it, { image_url: u }), seed: st.r.pattern_seed, wear: st.r.wear }; } continue; }
     for (const k of SLOT_KEYS) { const g = get(side + '_' + k); if (g && g.it.image_url) eq[side][k] = { item: g.it, seed: g.r.pattern_seed, wear: g.r.wear }; }
   }
+  const fl = get('flair'), nm = get('name_effect'); eqFlair = fl ? fl.it : null; eqName = nm ? nm.it : null;
+  applyName();
 }
 function loRender() {
   const lo = loData.loadouts.find(l => l.slot === loTab);
   if (!lo) { $('loView').innerHTML = '<h2>Loadout</h2><p style="color:var(--mute)">Loadouts are not set up yet. Run the SQL step.</p>'; return; }
   const cell = (side, key) => {
-    const s = loData.slots.find(x => x.loadout_id === lo.id && x.slot_key === side + '_' + key);
+    const s = loData.slots.find(x => x.loadout_id === lo.id && x.slot_key === slotId(side, key));
     const r = s && loData.inv.find(i => i.id === s.inventory_id), it = r && loData.items.find(i => i.id === r.item_id);
-    const img = it ? itemImg(it, r.pattern_seed, 52, r.wear) : key === 'set' ? '<div class="boxph">∅</div>' : '<div class="pc ' + (side === 'black' ? 'b' : 'w') + '" style="font-size:2.4rem;line-height:1">' + GLYPH[CURG[key.split('_')[0]]] + '\uFE0E</div>';
+    const img = it ? itemImg(it, r.pattern_seed, 52, r.wear) : (key === 'set' || key === 'board' || key === 'flair' || key === 'name_effect') ? '<div class="boxph">∅</div>' : '<div class="pc ' + (side === 'black' ? 'b' : 'w') + '" style="font-size:2.4rem;line-height:1">' + GLYPH[CURG[key.split('_')[0]]] + '\uFE0E</div>';
     return '<div class="card2 lo" data-side="' + side + '" data-key="' + key + '" style="cursor:pointer"><div class="cin" style="padding:.35rem .3rem"><div class="cimg" style="height:58px">' + img + '</div><b>' + slotName(key) +
       '</b><small style="color:var(--mute);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (it ? esc(it.name) : 'Default') + '</small></div><div class="rbar" style="background:' + (it ? RCOL[it.rarity] || RCOL.gray : 'var(--line)') + '"></div></div>';
   };
   const half = side => '<div style="flex:1;min-width:280px"><h3 style="margin-bottom:.5rem">' + side[0].toUpperCase() + side.slice(1) + ' side</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(88px,1fr))">' +
-    ['set'].concat(SLOT_KEYS).map(k => cell(side, k)).join('') + '</div></div>';
+    ['set', 'board'].concat(SLOT_KEYS).map(k => cell(side, k)).join('') + '</div></div>';
   $('loView').innerHTML = '<h2 style="margin-bottom:.8rem">Loadout</h2><div class="btns" style="margin-bottom:1rem">' +
     [1, 2, 3].map(n => '<button data-lo="' + n + '" class="' + (n === loTab ? 'primary' : '') + '">Loadout ' + n + (n === loData.active ? ' ★' : '') + '</button>').join('') +
     '<button data-active="1"' + (loTab === loData.active ? ' disabled' : '') + '>' + (loTab === loData.active ? 'This one is in use' : 'Use this loadout') + '</button></div>' +
     '<div style="display:flex;gap:1.2rem;flex-wrap:wrap">' + half('white') + half('black') + '</div>' +
+    '<h3 style="margin:1.2rem 0 .5rem">Profile</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(105px,1fr));max-width:340px">' + cell('', 'flair') + cell('', 'name_effect') + '</div>' +
     '<p style="color:var(--mute);margin-top:1rem">Every pawn, knight, bishop and rook has its own slot, so you can show off different skins at once. A full set clears that side\'s single pieces, and picking a single piece clears the set. Empty slots use the default pieces.</p>';
 }
 function loPick(side, key) {
   const type = key.split('_')[0];
-  const rows = loData.inv.map(r => ({ r, it: loData.items.find(i => i.id === r.item_id) })).filter(x => x.it && (x.it.side === 'both' || x.it.side === side) &&
-    (key === 'set' ? x.it.kind === 'set' : (x.it.kind === 'piece' && x.it.piece === type)));
-  $('inspBox').innerHTML = '<h3 style="margin-bottom:.6rem">' + side + ' · ' + slotName(key).toLowerCase() + '</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(100px,1fr));max-height:55vh;overflow:auto">' +
+  const rows = loData.inv.map(r => ({ r, it: loData.items.find(i => i.id === r.item_id) })).filter(x => x.it && (key === 'flair' || key === 'name_effect' || x.it.side === 'both' || x.it.side === side) &&
+    (key === 'set' ? x.it.kind === 'set' : key === 'board' ? x.it.kind === 'board' : key === 'flair' ? x.it.kind === 'flair' : key === 'name_effect' ? x.it.kind === 'username effect' : (x.it.kind === 'piece' && x.it.piece === type)));
+  $('inspBox').innerHTML = '<h3 style="margin-bottom:.6rem">' + (side ? side + ' · ' : '') + slotName(key).toLowerCase() + '</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(100px,1fr));max-height:55vh;overflow:auto">' +
     '<div class="card2" data-pick="" style="cursor:pointer"><div class="cin"><div class="cimg"><div class="boxph">∅</div></div><b>None</b><small style="color:var(--mute);display:block">default</small></div><div class="rbar" style="background:var(--line)"></div></div>' +
     rows.map(x => '<div class="card2" data-pick="' + x.r.id + '" style="cursor:pointer"><div class="cin"><div class="cimg">' + itemImg(x.it, x.r.pattern_seed, 60, x.r.wear) + '</div><b>' + esc(x.it.name) +
       '</b><small style="color:var(--mute);display:block">' + COND(Number(x.r.wear)) + '</small></div><div class="rbar" style="background:' + (RCOL[x.it.rarity] || RCOL.gray) + '"></div></div>').join('') + '</div>' +
@@ -1343,13 +1392,14 @@ function loPick(side, key) {
 }
 async function equip(side, key, invId) {
   const lo = loData.loadouts.find(l => l.slot === loTab); if (!lo) return;
+  const sk = slotId(side, key), isPiece = key !== 'set' && key !== 'board' && key !== 'flair' && key !== 'name_effect';
   try {
     const L = () => db.from('loadout_slots').delete().eq('loadout_id', lo.id);
     if (invId) { const r0 = await L().eq('inventory_id', invId); if (r0.error) throw r0.error; }                    // an item can only sit in one slot
-    if (invId && key === 'set') { const r = await L().like('slot_key', side + '_%').neq('slot_key', side + '_set'); if (r.error) throw r.error; }
-    if (invId && key !== 'set') { const r = await L().eq('slot_key', side + '_set'); if (r.error) throw r.error; }
-    const r2 = invId ? await db.from('loadout_slots').upsert({ loadout_id: lo.id, slot_key: side + '_' + key, inventory_id: invId }, { onConflict: 'loadout_id,slot_key' })
-                     : await L().eq('slot_key', side + '_' + key);
+    if (invId && key === 'set') { const r = await L().in('slot_key', SLOT_KEYS.map(k => side + '_' + k)); if (r.error) throw r.error; }
+    if (invId && isPiece) { const r = await L().eq('slot_key', side + '_set'); if (r.error) throw r.error; }
+    const r2 = invId ? await db.from('loadout_slots').upsert({ loadout_id: lo.id, slot_key: sk, inventory_id: invId }, { onConflict: 'loadout_id,slot_key' })
+                     : await L().eq('slot_key', sk);
     if (r2.error) throw r2.error;
   } catch (err) { showErr(err.message); }
   await loadLoadouts(); loRender(); render();
@@ -1516,6 +1566,7 @@ async function puzzleAfterMove() {
 async function puzzleFinish(solved, silent) {
   if (!puz || puz.over) return;
   const p = puz; p.over = true; p.busy = true;
+  if (!silent) { db.rpc('quest_event', { p_kind: 'puzzles completed', p_amount: 1 }); if (solved) db.rpc('quest_event', { p_kind: 'puzzles solved', p_amount: 1 }); }
   if (p.kind === 'wp') {
     const secs = Math.min(180, Math.max(1, Math.round((Date.now() - p.t0) / 1000)));
     const { data, error } = await db.rpc('wp_answer', { p_set: p.set, p_puzzle: p.id, p_solved: solved, p_seconds: secs });
@@ -1524,6 +1575,7 @@ async function puzzleFinish(solved, silent) {
     puzzleSound(solved);
     if (data.cycle_done) setPz('Cycle ' + data.cycle + ' complete! ' + fmtSecs(data.seconds) + ' with ' + data.misses + ' misses. Next cycle goal: ' + fmtSecs(data.next_target) + ' (half the time).');
     else setPz((solved ? 'Correct. ' : 'Missed. The solution is shown, and it comes back later this cycle. ') + data.done + ' / ' + data.size + ' solved this cycle.', !solved);
+    if (!data.cycle_done) setTimeout(() => { if (puz && puz.over && puz.id === p.id && view === 'pz' && pzTab === 'wp') wpStartNext(); }, 500);
     wpLoad(); return;
   }
   if (!p.ranked) { if (silent) return; puzzleSound(solved); setPz((solved ? 'Solved! ' : 'Wrong. The right move is shown. ') + '(Practice, no rating change.)', !solved); return; }
@@ -1561,14 +1613,15 @@ async function wpStats() {
     ((cy.data || []).length ? '<div style="color:var(--mute);margin-top:.4rem">' + cy.data.map(c => 'Cycle ' + c.cycle + ': ' + fmtSecs(c.seconds) + ', ' + c.misses + ' misses').join('<br>') + '</div>' : '');
 }
 $('wpSel').onchange = wpStats;
-$('wpStart').onclick = async () => {
+async function wpStartNext() {
   if (puz && !puz.over) return;
   const sid = $('wpSel').value; if (!sid) return setPz('Create a set first.', true);
   setPz('Loading...');
   const { data, error } = await db.rpc('wp_next', { p_set: sid });
   if (error) { setPz(error.message, true); wpLoad(); return; }
   beginPuzzle(data, { kind: 'wp', set: sid, label: 'Puzzle ' + (data.done + 1) + ' / ' + data.size + ', cycle ' + data.cycle + '.' });
-};
+}
+$('wpStart').onclick = wpStartNext;
 $('wpDel').onclick = async () => {
   const sid = $('wpSel').value; if (!sid || !confirm('Delete this set and all its progress?')) return;
   const { error } = await db.from('wp_sets').delete().eq('id', sid);
@@ -1707,6 +1760,140 @@ $('invView').addEventListener('contextmenu', e => { const c = e.target.closest('
 $('cscClose').onclick = () => $('caseScr').classList.add('hidden');
 $('cscOpen').onclick = async () => { $('cscOpen').disabled = true; await doOpenCase(csId); csUpdate(); };
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('insp').classList.contains('hidden') && $('roll').classList.contains('hidden')) $('caseScr').classList.add('hidden'); });
+
+// ---------- Equipped board and profile cosmetics ----------
+function applyBoard() {
+  const b = $('board'), it = eqBoard[flipped ? 'black' : 'white'], pc = (it && it.pattern_config) || {};
+  if (it) { b.style.setProperty('--light', pc.board_light || '#e6ecef'); b.style.setProperty('--dark', pc.board_dark || '#6f8ea3'); }
+  else { b.style.removeProperty('--light'); b.style.removeProperty('--dark'); }
+  b.classList.toggle('imgboard', !!(it && it.image_url));
+  b.style.backgroundImage = it && it.image_url ? "url('" + String(it.image_url).replace(/'/g, '%27') + "')" : '';
+}
+function applyName() {
+  const el = $('sName'); if (!el) return;
+  const pc = (eqName && eqName.pattern_config) || {};
+  el.className = pc.name_fx && pc.name_fx !== 'none' ? 'nfx-' + pc.name_fx : '';
+  el.style.setProperty('--nc', pc.name_color || '#f0b429');
+  let fl = $('sFlair');
+  if (!fl) { fl = document.createElement('img'); fl.id = 'sFlair'; fl.alt = ''; fl.draggable = false; fl.style.cssText = 'height:22px;vertical-align:middle;margin-right:.35rem'; el.parentNode.insertBefore(fl, el); }
+  if (eqFlair && eqFlair.image_url) { fl.src = eqFlair.image_url; fl.style.display = ''; } else fl.style.display = 'none';
+}
+
+// ---------- Analysis board (Stockfish, evaluation bar, best moves, free movement) ----------
+const AN_START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+const an = { stack: [AN_START], sans: [], lasts: [null], idx: 0, searching: false, again: false, lines: [], fen: '', arrow: null, raf: 0 };
+function anEnter() {
+  mode = 'analysis'; game.load(AN_START); an.stack = [AN_START]; an.sans = []; an.lasts = [null]; an.idx = 0; an.lines = []; an.arrow = null;
+  sel = null; legal = []; last = []; pre = null; flipped = false; clearDrawings();
+  $('botPanel').classList.add('hidden'); $('localBtns').classList.add('hidden'); $('anPanel').classList.remove('hidden'); $('evalbar').classList.add('on');
+  render(); anAnalyze();
+}
+function anLeave() {
+  an.arrow = null; an.again = false; $('evalbar').classList.remove('on'); $('anPanel').classList.add('hidden');
+  if (an.searching) startEngine().then(w => w.postMessage('stop')).catch(() => { /* ignore */ });
+  mode = 'local'; game.reset(); sel = null; legal = []; last = []; pre = null; flipped = false;
+  $('botPanel').classList.remove('hidden'); $('localBtns').classList.remove('hidden');
+  render();
+}
+function anLegal(sq) {
+  const p = game.get(sq); if (!p) return [];
+  if (p.color === game.turn()) return game.moves({ square: sq, verbose: true });
+  const parts = game.fen().split(' '); parts[1] = p.color; parts[3] = '-';          // free movement: also lets you move the side that is not on turn
+  return new Chess(parts.join(' ')).moves({ square: sq, verbose: true });
+}
+function anMakeMove(from, to, promo) {
+  const p = game.get(from); if (!p) return;
+  if (p.color !== game.turn()) { const parts = game.fen().split(' '); parts[1] = p.color; parts[3] = '-'; game.load(parts.join(' ')); }
+  const mv = game.move({ from, to, promotion: promo || 'q' });
+  if (!mv) { sel = null; legal = []; render(); return; }
+  an.stack = an.stack.slice(0, an.idx + 1); an.sans = an.sans.slice(0, an.idx); an.lasts = an.lasts.slice(0, an.idx + 1);
+  an.stack.push(game.fen()); an.sans.push(mv.san); an.lasts.push([from, to]); an.idx++;
+  last = [from, to]; sel = null; legal = []; render(); anAnalyze();
+}
+function anClick(sq) {
+  if (sel && legal.find(m => m.to === sq)) { anMakeMove(sel, sq, 'q'); return; }
+  const p = game.get(sq);
+  if (p && sq !== sel) { sel = sq; legal = anLegal(sq); } else { sel = null; legal = []; }
+  render();
+}
+function anGo(i) {
+  an.idx = Math.max(0, Math.min(an.stack.length - 1, i));
+  game.load(an.stack[an.idx]); last = an.lasts[an.idx] || []; sel = null; legal = []; render(); anAnalyze();
+}
+async function anAnalyze() {
+  if (mode !== 'analysis') return;
+  let w; try { w = await startEngine(); } catch (e) { $('anLines').textContent = e.message; return; }
+  if (mode !== 'analysis') return;
+  if (!$('anOn').checked) { if (an.searching) w.postMessage('stop'); an.lines = []; an.arrow = null; anRenderLines(); drawOverlay(); return; }
+  if (an.searching) { an.again = true; w.postMessage('stop'); return; }
+  an.fen = game.fen(); an.lines = []; an.arrow = null;
+  if (game.game_over()) { anRenderLines(); return; }
+  an.searching = true; w.onmessage = anMsg;
+  w.postMessage('setoption name MultiPV value 3'); w.postMessage('setoption name Skill Level value 20');
+  w.postMessage('position fen ' + an.fen); w.postMessage('go depth 22 movetime 20000');
+}
+function anMsg(e) {
+  const t = String(e.data);
+  if (t.startsWith('bestmove')) { an.searching = false; if (an.again) { an.again = false; anAnalyze(); } return; }
+  if (!t.startsWith('info') || !t.includes(' pv ') || mode !== 'analysis' || an.again) return;
+  const g = re => { const m = re.exec(t); return m ? m[1] : null; };
+  const mpv = Number(g(/ multipv (\d+)/) || 1), cp = g(/ score cp (-?\d+)/), mate = g(/ score mate (-?\d+)/), pv = (/ pv (.+)$/.exec(t) || [])[1];
+  if (!pv) return;
+  an.lines[mpv - 1] = { depth: Number(g(/ depth (\d+)/)), cp: cp != null ? Number(cp) : null, mate: mate != null ? Number(mate) : null, pv: pv.trim().split(' ') };
+  if (!an.raf) an.raf = requestAnimationFrame(() => { an.raf = 0; anRenderLines(); });
+}
+function anSetBar(pct, label) {
+  const f = $('evalFill');
+  if (flipped) { f.style.top = '0'; f.style.bottom = 'auto'; } else { f.style.bottom = '0'; f.style.top = 'auto'; }
+  f.style.height = pct + '%'; $('evalTxt').textContent = label;
+}
+function anRenderLines() {
+  const fen = an.fen || game.fen();
+  if (game.game_over()) {
+    const mated = game.in_checkmate();
+    anSetBar(mated ? (game.turn() === 'w' ? 0 : 100) : 50, mated ? '#0' : '=');
+    $('anLines').innerHTML = '<div class="anline"><span>' + (mated ? 'Checkmate' : 'Draw') + '</span></div>'; an.arrow = null; drawOverlay(); return;
+  }
+  const sign = fen.split(' ')[1] === 'w' ? 1 : -1;
+  const label = l => l.mate != null ? ((sign * l.mate > 0 ? '+' : '-') + '#' + Math.abs(l.mate)) : ((sign * l.cp >= 0 ? '+' : '') + (sign * l.cp / 100).toFixed(2));
+  const toSan = pv => {
+    const t = new Chess(fen), out = []; let n = Number(fen.split(' ')[5]) || 1, c = t.turn();
+    for (let i = 0; i < Math.min(pv.length, 9); i++) {
+      const u = pv[i], m = t.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] }); if (!m) break;
+      out.push((c === 'w' ? n + '. ' : (i === 0 ? n + '... ' : '')) + m.san); if (c === 'b') n++; c = c === 'w' ? 'b' : 'w';
+    }
+    return out.join(' ');
+  };
+  const ls = an.lines.filter(Boolean);
+  $('anLines').innerHTML = ls.length ? ls.map(l => '<div class="anline"><b>' + label(l) + '</b><span>' + esc(toSan(l.pv)) + '</span></div>').join('') + '<div style="color:var(--mute);font-size:.8rem;margin-top:.3rem">Depth ' + ls[0].depth + '</div>' : '<div style="color:var(--mute)">Thinking...</div>';
+  if (ls[0]) {
+    const l = ls[0], wcp = sign * (l.cp || 0);
+    anSetBar(l.mate != null ? (sign * l.mate > 0 ? 100 : 0) : 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * wcp)) - 1), label(l));
+    an.arrow = { from: l.pv[0].slice(0, 2), to: l.pv[0].slice(2, 4) }; drawOverlay();
+  }
+}
+function anRenderPanel() {
+  $('status').textContent = '';
+  const f0 = an.stack[0].split(' '); let n = Number(f0[5]) || 1, c = f0[1];
+  $('anMoves').innerHTML = an.sans.map((m, i) => {
+    const lab = c === 'w' ? n + '. ' : (i === 0 ? n + '... ' : ''); if (c === 'b') n++; c = c === 'w' ? 'b' : 'w';
+    return '<span class="anm" data-i="' + (i + 1) + '" style="cursor:pointer;margin-right:.4rem;' + (i + 1 === an.idx ? 'color:var(--gold);font-weight:700' : 'color:var(--mute)') + '">' + lab + esc(m) + '</span>';
+  }).join('') || '<span style="color:var(--mute)">Make a move to start.</span>';
+  if (document.activeElement !== $('anFen')) $('anFen').value = game.fen();
+  anRenderLines();
+}
+$('anMoves').addEventListener('click', e => { const m = e.target.closest('.anm'); if (m) anGo(Number(m.dataset.i)); });
+$('anBack').onclick = () => anGo(an.idx - 1);
+$('anFwd').onclick = () => anGo(an.idx + 1);
+$('anFlip').onclick = () => { flipped = !flipped; render(); };
+$('anReset').onclick = () => anEnter();
+$('anOn').onchange = () => anAnalyze();
+$('anLoad').onclick = () => {
+  const f = $('anFen').value.trim(), keep = game.fen();
+  if (!f || !game.load(f)) { game.load(keep); setTimeout(() => { $('anFen').value = ''; $('anFen').placeholder = 'That FEN is not valid'; }, 0); return; }
+  an.stack = [game.fen()]; an.sans = []; an.lasts = [null]; an.idx = 0; sel = null; legal = []; last = []; render(); anAnalyze();
+};
+$('anCopy').onclick = () => { try { navigator.clipboard.writeText(game.fen()); } catch (e) { $('anFen').select(); } };
 </script>
 </body>
 </html>
