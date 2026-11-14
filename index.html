@@ -120,6 +120,12 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
 .rmark{position:absolute;left:50%;top:0;bottom:0;width:3px;margin-left:-1.5px;background:var(--gold);box-shadow:0 0 12px var(--gold);z-index:2}
 .lo .cimg{background:var(--dark);border-radius:4px}
 .colimg{position:absolute;top:10px;left:10px;width:46px;height:46px;object-fit:contain;border-radius:6px;background:rgba(0,0,0,.35);padding:3px}
+.caprow{display:flex;gap:6px;align-items:center;margin:4px 0}
+.caprow .capstrip{flex:1;margin:0}
+.clk{min-width:82px;text-align:center;font:700 1.15rem 'Courier New',monospace;background:#0d1a23;border:1px solid var(--line);border-radius:4px;padding:3px 8px;font-variant-numeric:tabular-nums}
+.clk.on{background:#e8eef2;color:#10202b}
+.clk.low{color:var(--danger)} .clk.on.low{background:#ffd9d4}
+.tc{margin-top:.6rem} .tc label{display:block;font-size:.85rem;color:var(--mute);margin-top:.4rem} .tc .btns button{padding:.3rem .55rem}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -156,7 +162,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
   </header>
   <nav id="nav"></nav>
   <main id="playView">
-    <div class="bw"><div class="capstrip" id="capTop"></div><div id="board" aria-label="Chess board"></div><div class="capstrip" id="capBot"></div></div>
+    <div class="bw"><div class="caprow"><div class="capstrip" id="capTop"></div><div class="clk hidden" id="clkTop"></div></div><div id="board" aria-label="Chess board"></div><div class="caprow"><div class="capstrip" id="capBot"></div><div class="clk hidden" id="clkBot"></div></div></div>
     <div class="side">
       <div class="bot">
         <select id="botSel" aria-label="Choose a bot"></select>
@@ -165,6 +171,12 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
           <option value="black">Play as Black</option>
           <option value="random">Random side</option>
         </select>
+        <div class="tc">
+          <div id="tcBtns" class="btns"><button data-m="0">No clock</button><button data-m="1">1 min</button><button data-m="3">3 min</button><button data-m="5">5 min</button><button data-m="10">10 min</button><button data-m="30">30 min</button></div>
+          <label for="tcMin">Time per side: <b id="tcMinTxt"></b></label><input type="range" id="tcMin" min="1" max="60" step="1">
+          <label for="tcInc">Increment per move: <b id="tcIncTxt"></b></label><input type="range" id="tcInc" min="0" max="30" step="1">
+          <div id="tcInfo" style="color:var(--mute);font-size:.85rem;margin-top:.3rem"></div>
+        </div>
         <div class="btns">
           <button id="btnBot" class="primary">Play bot</button>
           <button id="btnResign">Resign</button>
@@ -286,6 +298,7 @@ let sel = null, legal = [], last = [], flipped = false;
 let mode = 'local', myColor = 'w', bots = [], bot = null, botGame = null, thinking = false;
 let profElo = null, devAdmin = false;
 let pre = null, questPly = 0;
+let clock = null, curPen = { s: 0, d: 0, t: 1, r: 0 }, flagging = false;
 let eq = { white: {}, black: {} }, loData = { loadouts: [], slots: [], inv: [], items: [], active: 1 }, loTab = 1;
 const T2N = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };                                   // queued premove {from,to}
 let arrows = [], marks = [], drawFrom = null, drawTo = null, drawColor = '#2e9e5b';
@@ -352,6 +365,7 @@ function render() {
     b.appendChild(d);
   }
   b.appendChild(overlay);
+  renderClocks();
   drawOverlay();
   renderMaterial();
   renderStatus();
@@ -427,6 +441,7 @@ function drawOverlay() {
 function clearDrawings() { if (arrows.length || marks.length) { arrows = []; marks = []; drawOverlay(); } }
 function pickColor(e) { return e.shiftKey ? '#e0463a' : (e.ctrlKey || e.altKey || e.metaKey) ? '#3b82d9' : '#2e9e5b'; }
 $('board').addEventListener('contextmenu', e => e.preventDefault());
+$('board').addEventListener('dragstart', e => e.preventDefault());
 $('board').addEventListener('mousedown', e => {
   if (e.button !== 2) return;
   const el = e.target.closest('.sq'); if (!el) return;
@@ -589,7 +604,7 @@ $('btnNew').onclick = async () => {
     if (!confirm('Leaving this bot game counts as a loss. Continue?')) return;
     await finish('loss', 'You left the game', true);
   }
-  pre = null; clearDrawings(); $('ov').classList.add('hidden');
+  pre = null; clock = null; clearDrawings(); $('ov').classList.add('hidden');
   mode = 'local'; flipped = false; game.reset(); sel = null; legal = []; last = []; render();
 };
 $('btnUndo').onclick = () => { if (mode === 'bot') return; game.undo(); sel = null; legal = []; last = []; render(); };
@@ -625,23 +640,40 @@ async function engineMove(fen, b) {
   return new Promise(resolve => {
     w.onmessage = e => { const m = /^bestmove (\S+)/.exec(String(e.data)); if (m) resolve(m[1]); };
     const weak = b.elo < 1200;
-    w.postMessage('setoption name Skill Level value ' + (weak ? 0 : b.skill_level));
+    w.postMessage('setoption name Skill Level value ' + Math.max(0, (weak ? 0 : b.skill_level) - curPen.s));
     w.postMessage('position fen ' + fen);
-    w.postMessage('go depth ' + (weak ? 1 : b.depth) + ' movetime ' + (weak ? 50 : b.movetime_ms));
+    w.postMessage('go depth ' + Math.max(1, (weak ? 1 : b.depth) - curPen.d) + ' movetime ' + Math.max(40, Math.round((weak ? 50 : b.movetime_ms) * curPen.t)));
   });
 }
 
 // ---------- Bot games ----------
+// how long a person would think: quick in bullet, longer in rapid, fast in the opening and on forced moves, careful with its own clock
+function botDelay(cat) {
+  const n = game.history().length, nm = game.moves().length;
+  const r = ({ bullet: [120, 700], blitz: [400, 2600], rapid: [900, 5500], untimed: [1000, 3000] })[cat];
+  let d = r[0] + Math.pow(Math.random(), 1.6) * (r[1] - r[0]);
+  if (n < 8) d *= 0.5;
+  if (nm <= 2) d *= 0.4;
+  if (game.in_check()) d *= 0.8;
+  if (clock) {
+    const left = clock.ms[myColor === 'w' ? 'b' : 'w'];
+    d = Math.min(d, left * 0.05 + clock.inc * 0.5);
+    if (left < 5000) d = Math.min(d, 250);
+  }
+  return Math.max(60, d);
+}
 async function botTurn() {
   const gid = botGame;
   thinking = true; renderStatus();
   try {
     // wait a human-like 1-3 seconds so the bot doesn't answer instantly
-    const waitMs = 1000 + Math.random() * 2000;
+    const cat = clock ? clock.cat : 'untimed';
+    curPen = ({ bullet: { s: 3, d: 2, t: 0.35, r: 0.03 }, blitz: { s: 1, d: 1, t: 0.7, r: 0.01 } })[cat] || { s: 0, d: 0, t: 1, r: 0 };   // bullet plays a little worse than rapid
+    const waitMs = botDelay(cat);
     let [uci] = await Promise.all([engineMove(game.fen(), bot), new Promise(r => setTimeout(r, waitMs))]);
     if (botGame !== gid) { thinking = false; return; }
     // low-rated bots sometimes just play a random legal move (the lower the rating, the more often)
-    if (bot.elo < 1200 && Math.random() < (1200 - bot.elo) / 1200 * 0.95) {
+    if (Math.random() < (bot.elo < 1200 ? (1200 - bot.elo) / 1200 * 0.95 : 0) + curPen.r) {
       const all = game.moves({ verbose: true });
       const m = all[Math.floor(Math.random() * all.length)];
       uci = m.from + m.to + (m.promotion || '');
@@ -656,6 +688,7 @@ async function botTurn() {
 
 async function afterMove() {
   if (mode !== 'bot' || !botGame) return;
+  clockSync();
   const h = game.history({ verbose: true }), m = h[h.length - 1];
   if (m && h.length !== questPly) {                 // count what YOU just did for quests
     questPly = h.length;
@@ -670,7 +703,7 @@ async function afterMove() {
 
 async function finish(result, reason, quiet) {
   const id = botGame; if (!id) return;
-  botGame = null; pre = null;
+  botGame = null; pre = null; if (clock) clock.over = true;
   if (!result) result = game.in_checkmate() ? (game.turn() === myColor ? 'loss' : 'win') : 'draw';
   if (!reason) reason = game.in_checkmate() ? 'Checkmate' : game.in_stalemate() ? 'Stalemate' : game.in_threefold_repetition() ? 'Draw by repetition' : game.insufficient_material() ? 'Not enough pieces' : 'Draw';
   if (result === 'win' && reason === 'Checkmate') db.rpc('quest_event', { p_kind: 'give checkmate', p_amount: 1 });
@@ -693,6 +726,7 @@ $('btnBot').onclick = async () => {
   if (error) return showErr(error.message);
   game.reset(); sel = null; legal = []; last = []; pre = null; clearDrawings(); $('ov').classList.add('hidden');
   questPly = 0;
+  clock = tc.none ? null : { ms: { w: tc.min * 60000, b: tc.min * 60000 }, inc: tc.inc * 1000, n: 0, t0: Date.now(), cat: tcCat(), over: false };
   mode = 'bot'; bot = b; botGame = data; myColor = c === 'white' ? 'w' : 'b'; flipped = c === 'black';
   render();
   if (game.turn() !== myColor) botTurn();
@@ -714,7 +748,7 @@ const PIECES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'];
 const FX = ['none', 'color change', 'size change', 'brightness', 'pattern sheet'];
 const F = {
   items: [['name', 'text'], ['description', 'area'], ['kind', 'sel', KINDS], ['piece', 'sel', PIECES], ['rarity', 'sel', RARITIES], ['side', 'sel', ['both', 'white', 'black']],
-          ['wear_range', 'range'], ['is_pattern_based', 'chk'], ['pattern_effect', 'pcfg', FX], ['scratch_black', 'pscr'], ['pattern_sheet', 'patsheet'], ['is_default', 'chk'], ['collection_id', 'coll'], ['image_url', 'img'], ['set_images', 'setimgs']],
+          ['wear_range', 'range'], ['is_pattern_based', 'chk'], ['pattern_effect', 'pcfg', FX], ['scratch_black', 'pscr'], ['pattern_sheet', 'patsheet'], ['sheet_mode', 'psmode'], ['is_default', 'chk'], ['collection_id', 'coll'], ['image_url', 'img'], ['set_images', 'setimgs']],
   collections: [['name', 'text'], ['description', 'area'], ['is_active_drop', 'chk'], ['image_url', 'img']],
   cases: [['name', 'text'], ['description', 'area'], ['collection_id', 'coll'], ['allow_gold', 'chk'], ['image_url', 'img']],
   operations: [['name', 'text'], ['description', 'area'], ['currency_piece', 'sel', PIECES], ['lasts_days', 'dur'], ['image_url', 'img']],
@@ -722,7 +756,7 @@ const F = {
   operation_shop: [['item_id', 'item'], ['case_id', 'case'], ['cost_pawns', 'int']],
   shop_keys: [['case_id', 'case'], ['price', 'money']],
   shop_cases: [['case_id', 'case'], ['price', 'money']],
-  news: [['title', 'text'], ['body', 'area']]
+  news: [['title', 'text'], ['body', 'area'], ['image_url', 'img']]
 };
 const TITLE = { items: 'item', collections: 'collection / case', operations: 'operation', shop_keys: 'shop key', cases: 'case', shop_cases: 'case for sale', news: 'news post (shown once to every player)' };
 const rowName = r => r.name || r.title || (r.case_id ? nameOf(devCases, r.case_id) + (devTab === 'shop_keys' ? ' key' : '') : '');
@@ -754,8 +788,12 @@ $('dvTabOps').onclick = () => { devTab = 'operations'; devEdit = null; devRender
 function formHtml(fields, cur, pfx) {
   let f = '';
   for (const [k, type, opts] of fields) {
-    const v = type === 'pcfg' ? (cur.pattern_config || {}).effect : type === 'pscr' ? (cur.pattern_config || {}).scratch_black : type === 'patsheet' ? (cur.pattern_config || {}).sheet_url : cur[k], id = pfx + k, ida = ' id="' + id + '"';
+    const v = type === 'pcfg' ? (cur.pattern_config || {}).effect : type === 'pscr' ? (cur.pattern_config || {}).scratch_black : type === 'patsheet' ? (cur.pattern_config || {}).sheet_url : type === 'psmode' ? (cur.pattern_config || {}).sheet_mode : cur[k], id = pfx + k, ida = ' id="' + id + '"';
     if (type === 'chk') { f += '<label><input' + ida + ' type="checkbox"' + (v ? ' checked' : '') + '>' + lab(k) + '</label>'; continue; }
+    if (type === 'psmode') {
+      f += '<label for="' + pfx + k + '">pattern sheet replaces</label><select id="' + pfx + k + '"><option value="whites"' + (v === 'all' ? '' : ' selected') + '>Only whites and grays</option><option value="all"' + (v === 'all' ? ' selected' : '') + '>Everything except black</option></select>';
+      continue;
+    }
     if (type === 'patsheet') {
       f += '<label for="' + pfx + k + '">pattern sheet (used when the pattern effect is "pattern sheet")</label><div class="drop" data-for="' + pfx + k + '">' + (v ? 'Sheet set. Drop a new one to replace it.' : 'Drop the pattern sheet here, or click') + '</div><input id="' + pfx + k + '" type="file" accept="image/*" hidden>' +
         (v ? '<img src="' + esc(v) + '" alt="" style="height:48px;margin-top:.4rem">' : '');
@@ -821,6 +859,7 @@ async function collect(fields, cur, pfx) {
     if (type === 'chk') row[k] = el.checked;
     else if (type === 'num') row[k] = Math.min(1, Math.max(0, el.value === '' ? 1 : Number(el.value)));
     else if (type === 'dur') row[k] = Math.max(0, Number(el.value) || 0);
+    else if (type === 'psmode') row.pattern_config = Object.assign({}, row.pattern_config, { sheet_mode: el.value });
     else if (type === 'patsheet') { const sf = el.files[0]; row.pattern_config = Object.assign({}, row.pattern_config, { sheet_url: sf ? await devUpload(sf, false) : (cur.pattern_config || {}).sheet_url || null }); }
     else if (type === 'range') { row.wear_min = Number($(pfx + 'wear_min').value); row.wear_max = Number($(pfx + 'wear_max').value); row.wear_cap = row.wear_max; }
     else if (type === 'pcfg') row.pattern_config = Object.assign({}, row.pattern_config, { effect: el.value.trim() });
@@ -1022,6 +1061,31 @@ function patParts(it, seed) {
   if (fx === 'brightness') return { f: 'brightness(' + (0.6 + t * 0.8).toFixed(2) + ')', t: '' };
   return { f: '', t: '' };
 }
+// "Only whites and grays" mode: a mask that keeps just the light, uncolored parts of the piece (made once per image)
+const wmCache = {};
+function whiteMask(url) {
+  if (wmCache[url]) return wmCache[url] === 'x' ? null : wmCache[url];
+  wmCache[url] = 'x';
+  const im = new Image(); im.crossOrigin = 'anonymous';
+  im.onload = () => {
+    try {
+      const k = Math.min(1, 384 / Math.max(im.naturalWidth, im.naturalHeight)), w = Math.max(1, Math.round(im.naturalWidth * k)), h = Math.max(1, Math.round(im.naturalHeight * k));
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      const x = cv.getContext('2d', { willReadFrequently: true }); x.drawImage(im, 0, 0, w, h);
+      const d = x.getImageData(0, 0, w, h), px = d.data;
+      for (let i = 0; i < px.length; i += 4) {
+        const r = px[i], g = px[i + 1], b = px[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b), lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255, sat = mx ? (mx - mn) / mx : 0;
+        const a = (px[i + 3] / 255) * Math.min(1, Math.max(0, (lum - 0.06) / 0.14)) * Math.min(1, Math.max(0, (0.4 - sat) / 0.2));
+        px[i] = px[i + 1] = px[i + 2] = 255; px[i + 3] = Math.round(a * 255);
+      }
+      x.putImageData(d, 0, 0);
+      wmCache[url] = cv.toDataURL('image/png');
+      try { render(); if (view === 'inv') invRender(); else if (view === 'lo') loRender(); } catch (e) { /* ignore */ }
+    } catch (e) { /* image host blocked it: the normal cut-out is used */ }
+  };
+  im.src = url;
+  return null;
+}
 // Same seed = same cut-out of the sheet, every time, on every device.
 function prng(seed) {
   let a = (Math.max(1, seed || 1) * 2654435761) >>> 0;
@@ -1031,19 +1095,21 @@ function prng(seed) {
 // Scratches use multiply, so they never show on black parts, unless the item allows scratching black parts.
 function itemImg(it, seed, h, wear) {
   const w = Math.max(0, Math.min(1, Number(wear) || 0)), p = patParts(it, seed), hh = typeof h === 'number' ? h + 'px' : h;
-  const filt = (p.f ? p.f + ' ' : '') + 'saturate(' + (1 - 0.55 * w).toFixed(2) + ') brightness(' + (1 - 0.3 * w).toFixed(2) + ') contrast(' + (1 - 0.15 * w).toFixed(2) + ')';
+  const pcfg = (it.is_pattern_based && it.pattern_config) || {}, sheetOn = pcfg.effect === 'pattern sheet' && pcfg.sheet_url, filt = (sheetOn && pcfg.sheet_mode === 'all' ? 'brightness(18) ' : '') + (p.f ? p.f + ' ' : '') + 'saturate(' + (1 - 0.55 * w).toFixed(2) + ') brightness(' + (1 - 0.3 * w).toFixed(2) + ') contrast(' + (1 - 0.15 * w).toFixed(2) + ')';
   const tf = p.t ? 'transform:' + p.t + ';' : '';
   const iu = it.image_url || (it.set_images && (it.set_images.pawn || Object.values(it.set_images)[0]));
   if (!iu) return '<div class="pc ' + (it.side === 'black' ? 'b' : 'w') + '" style="height:' + hh + ';display:grid;place-items:center;font-size:' + (typeof h === 'number' ? h * 0.7 : 40) + 'px;filter:' + filt + ';' + tf + '">' + GLYPH[CURG[it.piece] || 'p'] + '\uFE0E</div>';
   const u = esc(iu), mask = "-webkit-mask:url('" + u + "') center/contain no-repeat;mask:url('" + u + "') center/contain no-repeat;";
   const lt = it.pattern_config && it.pattern_config.scratch_black ? ' lt' : '';
-  const pc = (it.is_pattern_based && it.pattern_config) || {};
+  const pc = pcfg;
   let sheet = '';
-  if (pc.effect === 'pattern sheet' && pc.sheet_url) {
+  if (sheetOn) {
+    const wm = pc.sheet_mode === 'all' ? null : whiteMask(iu);
+    const smask = wm ? "-webkit-mask:url('" + wm + "') center/contain no-repeat;mask:url('" + wm + "') center/contain no-repeat;" : mask;
     const rn = prng(seed), rot = Math.round(rn() * 360), sz = Math.round(150 + rn() * 250), px = Math.round(rn() * 100), py = Math.round(rn() * 100);
-    sheet = '<span style="position:absolute;inset:0;overflow:hidden;pointer-events:none;mix-blend-mode:multiply;' + mask + '"><span style="position:absolute;inset:-50%;transform:rotate(' + rot + 'deg);background:url(\'' + esc(pc.sheet_url) + '\') ' + px + '% ' + py + '%/' + sz + '% auto repeat"></span></span>';
+    sheet = '<span style="position:absolute;inset:0;overflow:hidden;pointer-events:none;mix-blend-mode:multiply;' + smask + '"><span style="position:absolute;inset:-50%;transform:rotate(' + rot + 'deg);background:url(\'' + esc(pc.sheet_url) + '\') ' + px + '% ' + py + '%/' + sz + '% auto repeat"></span></span>';
   }
-  return '<span style="position:relative;display:inline-block;line-height:0;' + tf + '"><img src="' + u + '" alt="" style="height:' + hh + ';max-width:100%;object-fit:contain;filter:' + filt + '">' + sheet +
+  return '<span style="position:relative;display:inline-block;line-height:0;' + tf + '"><img src="' + u + '" alt="" draggable="false" style="-webkit-user-drag:none;user-select:none;pointer-events:none;height:' + hh + ';max-width:100%;object-fit:contain;filter:' + filt + '">' + sheet +
     (w > 0.02 ? '<span class="wearov' + lt + '" style="' + mask + 'opacity:' + Math.min(0.9, w * 1.15).toFixed(2) + '"></span>' : '') + '</span>';
 }
 function inspect(it, wear, seed, head) {
@@ -1245,10 +1311,62 @@ async function checkNews() {
   if (n.error || !(n.data || []).length) return;
   $('inspBox').innerHTML = '<h2 style="margin-bottom:.8rem">What\'s new</h2><div style="text-align:left;max-height:55vh;overflow:auto">' + n.data.map(x =>
     '<div style="margin-bottom:1rem"><b style="color:var(--gold)">' + esc(x.title) + '</b> <small style="color:var(--mute)">' + new Date(x.created_at).toLocaleDateString() +
-    '</small><div style="white-space:pre-wrap">' + esc(x.body) + '</div></div>').join('') + '</div><div class="btns" style="margin-top:1rem"><button class="primary" id="inspClose">Got it</button></div>';
+    '</small>' + (x.image_url ? '<img src="' + esc(x.image_url) + '" alt="" style="display:block;max-width:100%;border-radius:8px;margin:.4rem 0">' : '') + '<div style="white-space:pre-wrap">' + esc(x.body) + '</div></div>').join('') + '</div><div class="btns" style="margin-top:1rem"><button class="primary" id="inspClose">Got it</button></div>';
   $('insp').classList.remove('hidden'); $('inspClose').onclick = () => $('insp').classList.add('hidden');
   db.rpc('mark_news_seen');
 }
+
+// ---------- Time controls for bot games ----------
+let tc = Object.assign({ none: true, min: 10, inc: 0 }, (() => { try { return JSON.parse(localStorage.getItem('tc')); } catch (e) { return {}; } })());
+const tcCat = () => { const est = tc.min * 60 + 40 * tc.inc; return est < 180 ? 'bullet' : est < 600 ? 'blitz' : 'rapid'; };
+function tcRender() {
+  $('tcMin').value = tc.min; $('tcInc').value = tc.inc;
+  $('tcMinTxt').textContent = tc.min + ' min'; $('tcIncTxt').textContent = tc.inc + ' sec';
+  $('tcMin').disabled = $('tcInc').disabled = tc.none;
+  document.querySelectorAll('#tcBtns button').forEach(b => { b.className = (b.dataset.m === '0' ? tc.none : (!tc.none && Number(b.dataset.m) === tc.min)) ? 'primary' : ''; });
+  $('tcInfo').textContent = tc.none ? 'No clock.' : tcCat()[0].toUpperCase() + tcCat().slice(1) + ' · ' + tc.min + ' + ' + tc.inc;
+  try { localStorage.setItem('tc', JSON.stringify(tc)); } catch (e) { /* ignore */ }
+}
+$('tcBtns').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; const m = Number(b.dataset.m); tc.none = m === 0; if (m) tc.min = m; tcRender(); });
+$('tcMin').addEventListener('input', () => { tc.none = false; tc.min = Number($('tcMin').value); tcRender(); });
+$('tcInc').addEventListener('input', () => { tc.none = false; tc.inc = Number($('tcInc').value); tcRender(); });
+tcRender();
+
+function clockSync() {   // charge the side that just moved and add the increment (the first move of each side is free)
+  if (!clock || clock.over) return;
+  const n = game.history().length, now = Date.now();
+  if (clock.n > n) clock.n = n;
+  while (clock.n < n) {
+    const i = clock.n, mover = i % 2 === 0 ? 'w' : 'b';
+    if (i >= 2) clock.ms[mover] = Math.max(0, clock.ms[mover] - (now - clock.t0)) + clock.inc;
+    clock.n++; clock.t0 = now;
+  }
+}
+function fmtClock(ms) {
+  ms = Math.max(0, ms);
+  if (ms < 10000) return Math.floor(ms / 1000) + '.' + Math.floor(ms % 1000 / 100);
+  const t = Math.ceil(ms / 1000); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+}
+function renderClocks() {
+  const show = !!clock && mode === 'bot';
+  $('clkTop').classList.toggle('hidden', !show); $('clkBot').classList.toggle('hidden', !show);
+  if (!show) return;
+  const live = !clock.over && !game.game_over() && game.history().length >= 2, now = Date.now();
+  const val = c => clock.ms[c] - (live && game.turn() === c ? now - clock.t0 : 0);
+  const bottom = flipped ? 'b' : 'w', top = bottom === 'w' ? 'b' : 'w';
+  for (const [id, c] of [['clkBot', bottom], ['clkTop', top]]) {
+    const v = val(c), el = $(id);
+    el.textContent = fmtClock(v); el.classList.toggle('on', !clock.over && game.turn() === c); el.classList.toggle('low', v < 10000);
+  }
+  if (live && val(game.turn()) <= 0) clockFlag(game.turn());
+}
+function clockFlag(c) {
+  if (flagging || !botGame) return;
+  flagging = true; clock.ms[c] = 0;
+  const lost = c === myColor;
+  finish(lost ? 'loss' : 'win', lost ? 'You ran out of time' : 'Opponent ran out of time').finally(() => { flagging = false; });
+}
+setInterval(renderClocks, 100);
 </script>
 </body>
 </html>
