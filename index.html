@@ -198,7 +198,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
 <div id="roll" class="hidden"><div class="rbox"><h2 style="margin-bottom:.8rem">Opening case...</h2><div class="rview"><div id="rstrip"></div><div class="rmark"></div></div><button id="rskip">Skip</button></div></div>
 <div id="insp" class="hidden"><div class="box" id="inspBox"></div></div>
 <div id="dev" class="hidden"><div class="panel">
-  <div class="dh"><b>Dev tools</b><span class="btns"><button id="dvTabItems">Items</button><button id="dvTabColls">Collections</button><button id="dvTabCases">Cases</button><button id="dvTabOps">Operations</button><button id="dvTabShop">Shop keys</button><button id="dvTabShopC">Shop cases</button><button id="dvTabMoney">Money</button><button id="dvClose">Close</button></span></div>
+  <div class="dh"><b>Dev tools</b><span class="btns"><button id="dvTabItems">Items</button><button id="dvTabColls">Collections</button><button id="dvTabCases">Cases</button><button id="dvTabOps">Operations</button><button id="dvTabShop">Shop keys</button><button id="dvTabShopC">Shop cases</button><button id="dvTabMoney">Money</button><button id="dvTabNews">News</button><button id="dvClose">Close</button></span></div>
   <div id="devBody"></div><div id="devMsg"></div>
 </div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -275,6 +275,7 @@ async function route(session) {
   render();
   loadOps();
   loadLoadouts().then(() => render());
+  checkNews();
 }
 db.auth.onAuthStateChange((_e, session) => setTimeout(() => route(session), 0));
 
@@ -303,7 +304,25 @@ function kingSquare(color) {
   }
 }
 
+// which loadout slot each piece on the board belongs to (a pawn keeps its skin as it moves; promoted pieces borrow the first slot of their new type)
+function idMap() {
+  const m = {};
+  for (const [c, r1, r2] of [['w', 1, 2], ['b', 8, 7]]) {
+    'abcdefgh'.split('').forEach((f, i) => { m[f + r2] = c + ':pawn_' + (i + 1); });
+    m['a' + r1] = c + ':rook_1'; m['h' + r1] = c + ':rook_2'; m['b' + r1] = c + ':knight_1'; m['g' + r1] = c + ':knight_2';
+    m['c' + r1] = c + ':bishop_1'; m['f' + r1] = c + ':bishop_2'; m['d' + r1] = c + ':queen'; m['e' + r1] = c + ':king';
+  }
+  for (const mv of game.history({ verbose: true })) {
+    const id = m[mv.from]; delete m[mv.from];
+    if (mv.flags.includes('e')) delete m[mv.to[0] + mv.from[1]];
+    m[mv.to] = mv.promotion ? mv.color + ':' + ({ q: 'queen', r: 'rook_1', b: 'bishop_1', n: 'knight_1' })[mv.promotion] : id;
+    if (mv.flags.includes('k')) { const r = mv.from[1]; m['f' + r] = m['h' + r]; delete m['h' + r]; }
+    if (mv.flags.includes('q')) { const r = mv.from[1]; m['d' + r] = m['a' + r]; delete m['a' + r]; }
+  }
+  return m;
+}
 function render() {
+  const ids = idMap();
   const b = $('board');
   b.innerHTML = '';
   const order = [0, 1, 2, 3, 4, 5, 6, 7];
@@ -325,7 +344,7 @@ function render() {
     if (p) {
       const s = document.createElement('span');
       s.className = 'pc ' + p.color;
-      const e = (mode !== 'bot' || p.color === myColor) ? eq[p.color === 'w' ? 'white' : 'black'][T2N[p.type]] : null;
+      const e = ids[name] && (mode !== 'bot' || p.color === myColor) ? eq[p.color === 'w' ? 'white' : 'black'][ids[name].split(':')[1]] : null;
       if (e && e.item.image_url) s.innerHTML = itemImg(e.item, e.seed, 'calc(var(--bs) / 8 * .72)', e.wear);
       else s.textContent = GLYPH[p.type] + '\uFE0E';
       d.appendChild(s);
@@ -692,20 +711,21 @@ $('btnResign').onclick = async () => {
 const KINDS = ['piece', 'set', 'charm', 'board', 'clock skin', 'username effect', 'win effect', 'loss effect', 'checkmate effect', 'draw effect', 'flair'];
 const RARITIES = ['gray', 'light blue', 'blue', 'purple', 'pink', 'red', 'gold'];
 const PIECES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'];
-const FX = ['none', 'color change', 'size change', 'brightness'];
+const FX = ['none', 'color change', 'size change', 'brightness', 'pattern sheet'];
 const F = {
   items: [['name', 'text'], ['description', 'area'], ['kind', 'sel', KINDS], ['piece', 'sel', PIECES], ['rarity', 'sel', RARITIES], ['side', 'sel', ['both', 'white', 'black']],
-          ['wear_cap', 'num'], ['is_pattern_based', 'chk'], ['pattern_effect', 'pcfg', FX], ['scratch_black', 'pscr'], ['is_default', 'chk'], ['collection_id', 'coll'], ['image_url', 'img'], ['set_images', 'setimgs']],
+          ['wear_range', 'range'], ['is_pattern_based', 'chk'], ['pattern_effect', 'pcfg', FX], ['scratch_black', 'pscr'], ['pattern_sheet', 'patsheet'], ['is_default', 'chk'], ['collection_id', 'coll'], ['image_url', 'img'], ['set_images', 'setimgs']],
   collections: [['name', 'text'], ['description', 'area'], ['is_active_drop', 'chk'], ['image_url', 'img']],
   cases: [['name', 'text'], ['description', 'area'], ['collection_id', 'coll'], ['allow_gold', 'chk'], ['image_url', 'img']],
   operations: [['name', 'text'], ['description', 'area'], ['currency_piece', 'sel', PIECES], ['lasts_days', 'dur'], ['image_url', 'img']],
   operation_quests: [['name', 'text'], ['kind', 'sel', ['win games', 'promote pawns', 'capture pieces', 'give checkmate', 'play games', 'custom']], ['description', 'area'], ['goal', 'int'], ['reward_pawns', 'int'], ['reward_item_id', 'item'], ['reward_case_id', 'case']],
   operation_shop: [['item_id', 'item'], ['case_id', 'case'], ['cost_pawns', 'int']],
   shop_keys: [['case_id', 'case'], ['price', 'money']],
-  shop_cases: [['case_id', 'case'], ['price', 'money']]
+  shop_cases: [['case_id', 'case'], ['price', 'money']],
+  news: [['title', 'text'], ['body', 'area']]
 };
-const TITLE = { items: 'item', collections: 'collection / case', operations: 'operation', shop_keys: 'shop key', cases: 'case', shop_cases: 'case for sale' };
-const rowName = r => r.name || (r.case_id ? nameOf(devCases, r.case_id) + (devTab === 'shop_keys' ? ' key' : '') : '');
+const TITLE = { items: 'item', collections: 'collection / case', operations: 'operation', shop_keys: 'shop key', cases: 'case', shop_cases: 'case for sale', news: 'news post (shown once to every player)' };
+const rowName = r => r.name || r.title || (r.case_id ? nameOf(devCases, r.case_id) + (devTab === 'shop_keys' ? ' key' : '') : '');
 let devOpen = false, devTab = 'items', devEdit = null, devRows = [], devItems = [], devColls = [], devCases = [];
 const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const lab = k => k.replace(/_id$/, '').replace(/_/g, ' ');
@@ -726,6 +746,7 @@ $('dvTabItems').onclick = () => { devTab = 'items'; devEdit = null; devRender();
 $('dvTabColls').onclick = () => { devTab = 'collections'; devEdit = null; devRender(); };
 $('dvTabCases').onclick = () => { devTab = 'cases'; devEdit = null; devRender(); };
 $('dvTabShopC').onclick = () => { devTab = 'shop_cases'; devEdit = null; devRender(); };
+$('dvTabNews').onclick = () => { devTab = 'news'; devEdit = null; devRender(); };
 $('dvTabMoney').onclick = () => { devTab = 'money'; devEdit = null; devRender(); };
 $('dvTabShop').onclick = () => { devTab = 'shop_keys'; devEdit = null; devRender(); };
 $('dvTabOps').onclick = () => { devTab = 'operations'; devEdit = null; devRender(); };
@@ -733,8 +754,19 @@ $('dvTabOps').onclick = () => { devTab = 'operations'; devEdit = null; devRender
 function formHtml(fields, cur, pfx) {
   let f = '';
   for (const [k, type, opts] of fields) {
-    const v = type === 'pcfg' ? (cur.pattern_config || {}).effect : type === 'pscr' ? (cur.pattern_config || {}).scratch_black : cur[k], id = pfx + k, ida = ' id="' + id + '"';
+    const v = type === 'pcfg' ? (cur.pattern_config || {}).effect : type === 'pscr' ? (cur.pattern_config || {}).scratch_black : type === 'patsheet' ? (cur.pattern_config || {}).sheet_url : cur[k], id = pfx + k, ida = ' id="' + id + '"';
     if (type === 'chk') { f += '<label><input' + ida + ' type="checkbox"' + (v ? ' checked' : '') + '>' + lab(k) + '</label>'; continue; }
+    if (type === 'patsheet') {
+      f += '<label for="' + pfx + k + '">pattern sheet (used when the pattern effect is "pattern sheet")</label><div class="drop" data-for="' + pfx + k + '">' + (v ? 'Sheet set. Drop a new one to replace it.' : 'Drop the pattern sheet here, or click') + '</div><input id="' + pfx + k + '" type="file" accept="image/*" hidden>' +
+        (v ? '<img src="' + esc(v) + '" alt="" style="height:48px;margin-top:.4rem">' : '');
+      continue;
+    }
+    if (type === 'range') {
+      const lo = cur.wear_min == null ? 0 : cur.wear_min, hi = cur.wear_max == null ? (cur.wear_cap == null ? 1 : cur.wear_cap) : cur.wear_max;
+      f += '<label>wear range</label><div id="wearTxt" style="color:var(--gold)">' + wearText(lo, hi) + '</div><label>lowest wear it can drop with</label><input id="' + pfx + 'wear_min" type="range" min="0" max="1" step="0.01" value="' + lo +
+        '"><label>highest wear it can drop with</label><input id="' + pfx + 'wear_max" type="range" min="0" max="1" step="0.01" value="' + hi + '">';
+      continue;
+    }
     if (type === 'pscr') { f += '<label><input' + ida + ' type="checkbox"' + (v ? ' checked' : '') + '>allow scratches on black parts</label>'; continue; }
     if (type === 'setimgs') {
       f += '<label>set piece images (only used when type is "set")</label>' + PIECES.map(pc => '<label for="' + pfx + 'setimg_' + pc + '" style="margin-top:.2rem">' + pc + '</label><div class="drop" data-for="' + pfx + 'setimg_' + pc + '">' +
@@ -789,6 +821,8 @@ async function collect(fields, cur, pfx) {
     if (type === 'chk') row[k] = el.checked;
     else if (type === 'num') row[k] = Math.min(1, Math.max(0, el.value === '' ? 1 : Number(el.value)));
     else if (type === 'dur') row[k] = Math.max(0, Number(el.value) || 0);
+    else if (type === 'patsheet') { const sf = el.files[0]; row.pattern_config = Object.assign({}, row.pattern_config, { sheet_url: sf ? await devUpload(sf, false) : (cur.pattern_config || {}).sheet_url || null }); }
+    else if (type === 'range') { row.wear_min = Number($(pfx + 'wear_min').value); row.wear_max = Number($(pfx + 'wear_max').value); row.wear_cap = row.wear_max; }
     else if (type === 'pcfg') row.pattern_config = Object.assign({}, row.pattern_config, { effect: el.value.trim() });
     else if (type === 'pscr') row.pattern_config = Object.assign({}, row.pattern_config, { scratch_black: el.checked });
     else if (type === 'setimgs') {
@@ -804,6 +838,13 @@ async function collect(fields, cur, pfx) {
   }
   return row;
 }
+const wearText = (lo, hi) => Number(lo).toFixed(2) + ' to ' + Number(hi).toFixed(2) + ' · ' + COND(Number(lo)) + ' to ' + COND(Number(hi));
+$('devBody').addEventListener('input', e => {
+  const id = e.target.id; if (id !== 'dv_wear_min' && id !== 'dv_wear_max') return;
+  const a = $('dv_wear_min'), b = $('dv_wear_max');
+  if (Number(a.value) > Number(b.value)) { if (id === 'dv_wear_min') b.value = a.value; else a.value = b.value; }
+  $('wearTxt').textContent = wearText(a.value, b.value);
+});
 const nameOf = (list, id) => { const x = list.find(r => r.id === id); return x ? x.name : '-'; };
 async function devMoney() {
   const ses = await db.auth.getSession();
@@ -813,7 +854,7 @@ async function devMoney() {
 }
 async function devRender() {
   if (!devOpen) return;
-  for (const [id, t] of [['dvTabItems', 'items'], ['dvTabColls', 'collections'], ['dvTabOps', 'operations'], ['dvTabShop', 'shop_keys'], ['dvTabCases', 'cases'], ['dvTabShopC', 'shop_cases'], ['dvTabMoney', 'money']]) $(id).className = devTab === t ? 'primary' : '';
+  for (const [id, t] of [['dvTabItems', 'items'], ['dvTabColls', 'collections'], ['dvTabOps', 'operations'], ['dvTabShop', 'shop_keys'], ['dvTabCases', 'cases'], ['dvTabShopC', 'shop_cases'], ['dvTabMoney', 'money'], ['dvTabNews', 'news']]) $(id).className = devTab === t ? 'primary' : '';
   if (devTab === 'money') return devMoney();
   const [ci, ii, rr, ca] = await Promise.all([db.from('collections').select('*').order('created_at'), db.from('items').select('*').order('created_at'),
                                           db.from(devTab).select('*').order('created_at', { ascending: false }), db.from('cases').select('*').order('created_at')]);
@@ -823,6 +864,9 @@ async function devRender() {
   const cur = devEdit || {};
   let h = '<b>' + (devEdit ? 'Editing: ' + esc(rowName(cur)) : 'New ' + TITLE[devTab]) + '</b>' + formHtml(F[devTab], cur, 'dv_') +
     '<div class="btns" style="margin-top:.8rem"><button class="primary" data-act="save">' + (devEdit ? 'Save changes' : 'Create') + '</button>' + (devEdit ? '<button data-act="cancel">Close editor</button>' : '') + '</div>';
+  if (devTab === 'items' && devEdit && devEdit.is_pattern_based && devEdit.image_url) {
+    h += '<div class="sec"><b>Pattern preview</b><div style="display:flex;gap:.8rem;flex-wrap:wrap;margin-top:.5rem">' + [1, 100, 250, 500, 750, 999].map(n => '<div style="text-align:center;background:#9db3c0;border-radius:6px;padding:.4rem"><div style="height:80px;display:grid;place-items:center">' + itemImg(devEdit, n, 76, 0) + '</div><small style="color:#10202b">#' + n + '</small></div>').join('') + '</div></div>';
+  }
   if (devTab === 'operations' && devEdit) {
     const [q, sh] = await Promise.all([db.from('operation_quests').select('*').eq('operation_id', devEdit.id).order('created_at'),
                                        db.from('operation_shop').select('*').eq('operation_id', devEdit.id).order('created_at')]);
@@ -836,7 +880,7 @@ async function devRender() {
       '<div style="margin-top:.8rem"><b>Add to the shop</b> (pick an item or a case)' + formHtml(F.operation_shop, {}, 'sh_') + '<div class="btns" style="margin-top:.6rem"><button data-act="adds">Add to shop</button></div></div></div>';
   } else if (devTab === 'operations') h += '<p style="color:var(--mute)">Create the operation first, then its quests and shop appear here.</p>';
   h += '<hr style="border-color:var(--line);margin:1.2rem 0"><b>' + devRows.length + ' existing</b>' + devRows.map(r => '<div class="li">' + (r.image_url ? '<img src="' + esc(r.image_url) + '" alt="">' : '') +
-    '<div><b>' + esc(rowName(r)) + '</b><br><small>' + esc(devTab === 'items' ? r.kind + ' · ' + r.rarity + ' · ' + r.side : devTab === 'collections' ? (r.is_active_drop ? 'weekly drop' : 'collection') : devTab === 'cases' ? 'holds: ' + nameOf(devColls, r.collection_id) + (r.allow_gold ? '' : ' (no gold)') : (devTab === 'shop_keys' || devTab === 'shop_cases') ? '$' + Number(r.price).toFixed(2) : r.currency_piece + ' · ends ' + new Date(r.ends_at).toLocaleString()) + '</small></div>' +
+    '<div><b>' + esc(rowName(r)) + '</b><br><small>' + esc(devTab === 'items' ? r.kind + ' · ' + r.rarity + ' · ' + r.side : devTab === 'collections' ? (r.is_active_drop ? 'weekly drop' : 'collection') : devTab === 'news' ? new Date(r.created_at).toLocaleString() : devTab === 'cases' ? 'holds: ' + nameOf(devColls, r.collection_id) + (r.allow_gold ? '' : ' (no gold)') : (devTab === 'shop_keys' || devTab === 'shop_cases') ? '$' + Number(r.price).toFixed(2) : r.currency_piece + ' · ends ' + new Date(r.ends_at).toLocaleString()) + '</small></div>' +
     '<button data-act="edit" data-id="' + r.id + '">Edit</button><button data-act="del" data-id="' + r.id + '">Delete</button></div>').join('');
   $('devBody').innerHTML = h;
 }
@@ -866,7 +910,7 @@ $('devBody').addEventListener('click', async e => {
     if (a === 'save') {
       const row = await collect(F[devTab], devEdit || {}, 'dv_');
       if (devTab === 'shop_keys' || devTab === 'shop_cases') { if (!row.case_id || !(row.price > 0)) throw new Error('Pick a case and a price.'); }
-      else if (!row.name) throw new Error('Give it a name first.');
+      else if (!(row.name || row.title)) throw new Error('Give it a name first.');
       if (devTab === 'operations') {
         const d = row.lasts_days; delete row.lasts_days;
         if (d > 0) row.ends_at = new Date(Date.now() + d * 864e5).toISOString(); else if (!devEdit) throw new Error('Set how many days the operation lasts.');
@@ -978,6 +1022,11 @@ function patParts(it, seed) {
   if (fx === 'brightness') return { f: 'brightness(' + (0.6 + t * 0.8).toFixed(2) + ')', t: '' };
   return { f: '', t: '' };
 }
+// Same seed = same cut-out of the sheet, every time, on every device.
+function prng(seed) {
+  let a = (Math.max(1, seed || 1) * 2654435761) >>> 0;
+  return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
 // wear: 0 = factory fresh, 1 = destroyed. Fades colors, darkens, adds grime and tiny scratches over the piece only.
 // Scratches use multiply, so they never show on black parts, unless the item allows scratching black parts.
 function itemImg(it, seed, h, wear) {
@@ -988,7 +1037,13 @@ function itemImg(it, seed, h, wear) {
   if (!iu) return '<div class="pc ' + (it.side === 'black' ? 'b' : 'w') + '" style="height:' + hh + ';display:grid;place-items:center;font-size:' + (typeof h === 'number' ? h * 0.7 : 40) + 'px;filter:' + filt + ';' + tf + '">' + GLYPH[CURG[it.piece] || 'p'] + '\uFE0E</div>';
   const u = esc(iu), mask = "-webkit-mask:url('" + u + "') center/contain no-repeat;mask:url('" + u + "') center/contain no-repeat;";
   const lt = it.pattern_config && it.pattern_config.scratch_black ? ' lt' : '';
-  return '<span style="position:relative;display:inline-block;line-height:0;' + tf + '"><img src="' + u + '" alt="" style="height:' + hh + ';max-width:100%;object-fit:contain;filter:' + filt + '">' +
+  const pc = (it.is_pattern_based && it.pattern_config) || {};
+  let sheet = '';
+  if (pc.effect === 'pattern sheet' && pc.sheet_url) {
+    const rn = prng(seed), rot = Math.round(rn() * 360), sz = Math.round(150 + rn() * 250), px = Math.round(rn() * 100), py = Math.round(rn() * 100);
+    sheet = '<span style="position:absolute;inset:0;overflow:hidden;pointer-events:none;mix-blend-mode:multiply;' + mask + '"><span style="position:absolute;inset:-50%;transform:rotate(' + rot + 'deg);background:url(\'' + esc(pc.sheet_url) + '\') ' + px + '% ' + py + '%/' + sz + '% auto repeat"></span></span>';
+  }
+  return '<span style="position:relative;display:inline-block;line-height:0;' + tf + '"><img src="' + u + '" alt="" style="height:' + hh + ';max-width:100%;object-fit:contain;filter:' + filt + '">' + sheet +
     (w > 0.02 ? '<span class="wearov' + lt + '" style="' + mask + 'opacity:' + Math.min(0.9, w * 1.15).toFixed(2) + '"></span>' : '') + '</span>';
 }
 function inspect(it, wear, seed, head) {
@@ -1115,6 +1170,8 @@ async function loadLoadouts() {
   loData = { loadouts: lo.data || [], slots: sl.data || [], inv: inv.data || [], items: its.data || [], active: (pr.data && pr.data.active_loadout) || 1 };
   buildEq();
 }
+const SLOT_KEYS = ['king', 'queen', 'rook_1', 'rook_2', 'bishop_1', 'bishop_2', 'knight_1', 'knight_2'].concat([1, 2, 3, 4, 5, 6, 7, 8].map(n => 'pawn_' + n));
+const slotName = k => k === 'set' ? 'Full set' : k.replace('_', ' ').replace(/^./, c => c.toUpperCase());
 function buildEq() {
   eq = { white: {}, black: {} };
   const lo = loData.loadouts.find(l => l.slot === loData.active) || loData.loadouts[0]; if (!lo) return;
@@ -1122,33 +1179,33 @@ function buildEq() {
     const r = loData.inv.find(i => i.id === s.inventory_id), it = r && loData.items.find(i => i.id === r.item_id); return it ? { r, it } : null; };
   for (const side of ['white', 'black']) {
     const st = get(side + '_set');
-    if (st) { for (const p of PIECES) { const u = (st.it.set_images || {})[p]; if (u) eq[side][p] = { item: Object.assign({}, st.it, { image_url: u }), seed: st.r.pattern_seed, wear: st.r.wear }; } continue; }
-    for (const p of PIECES) { const g = get(side + '_' + p); if (g && g.it.image_url) eq[side][p] = { item: g.it, seed: g.r.pattern_seed, wear: g.r.wear }; }
+    if (st) { for (const k of SLOT_KEYS) { const u = (st.it.set_images || {})[k.split('_')[0]]; if (u) eq[side][k] = { item: Object.assign({}, st.it, { image_url: u }), seed: st.r.pattern_seed, wear: st.r.wear }; } continue; }
+    for (const k of SLOT_KEYS) { const g = get(side + '_' + k); if (g && g.it.image_url) eq[side][k] = { item: g.it, seed: g.r.pattern_seed, wear: g.r.wear }; }
   }
 }
 function loRender() {
   const lo = loData.loadouts.find(l => l.slot === loTab);
   if (!lo) { $('loView').innerHTML = '<h2>Loadout</h2><p style="color:var(--mute)">Loadouts are not set up yet. Run the SQL step.</p>'; return; }
-  const cap = t => t[0].toUpperCase() + t.slice(1);
   const cell = (side, key) => {
     const s = loData.slots.find(x => x.loadout_id === lo.id && x.slot_key === side + '_' + key);
     const r = s && loData.inv.find(i => i.id === s.inventory_id), it = r && loData.items.find(i => i.id === r.item_id);
-    const img = it ? itemImg(it, r.pattern_seed, 56, r.wear) : key === 'set' ? '<div class="boxph">∅</div>' : '<div class="pc ' + (side === 'black' ? 'b' : 'w') + '" style="font-size:2.6rem;line-height:1">' + GLYPH[CURG[key]] + '\uFE0E</div>';
-    return '<div class="card2 lo" data-side="' + side + '" data-key="' + key + '" style="cursor:pointer"><div class="cin"><div class="cimg" style="height:64px">' + img + '</div><b>' + (key === 'set' ? 'Full set' : cap(key)) +
-      '</b><small style="color:var(--mute);display:block">' + (it ? esc(it.name) : 'Default') + '</small></div><div class="rbar" style="background:' + (it ? RCOL[it.rarity] || RCOL.gray : 'var(--line)') + '"></div></div>';
+    const img = it ? itemImg(it, r.pattern_seed, 52, r.wear) : key === 'set' ? '<div class="boxph">∅</div>' : '<div class="pc ' + (side === 'black' ? 'b' : 'w') + '" style="font-size:2.4rem;line-height:1">' + GLYPH[CURG[key.split('_')[0]]] + '\uFE0E</div>';
+    return '<div class="card2 lo" data-side="' + side + '" data-key="' + key + '" style="cursor:pointer"><div class="cin" style="padding:.35rem .3rem"><div class="cimg" style="height:58px">' + img + '</div><b>' + slotName(key) +
+      '</b><small style="color:var(--mute);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (it ? esc(it.name) : 'Default') + '</small></div><div class="rbar" style="background:' + (it ? RCOL[it.rarity] || RCOL.gray : 'var(--line)') + '"></div></div>';
   };
-  const half = side => '<div style="flex:1;min-width:260px"><h3 style="margin-bottom:.5rem">' + cap(side) + ' side</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(105px,1fr))">' +
-    ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn', 'set'].map(k => cell(side, k)).join('') + '</div></div>';
+  const half = side => '<div style="flex:1;min-width:280px"><h3 style="margin-bottom:.5rem">' + side[0].toUpperCase() + side.slice(1) + ' side</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(88px,1fr))">' +
+    ['set'].concat(SLOT_KEYS).map(k => cell(side, k)).join('') + '</div></div>';
   $('loView').innerHTML = '<h2 style="margin-bottom:.8rem">Loadout</h2><div class="btns" style="margin-bottom:1rem">' +
     [1, 2, 3].map(n => '<button data-lo="' + n + '" class="' + (n === loTab ? 'primary' : '') + '">Loadout ' + n + (n === loData.active ? ' ★' : '') + '</button>').join('') +
     '<button data-active="1"' + (loTab === loData.active ? ' disabled' : '') + '>' + (loTab === loData.active ? 'This one is in use' : 'Use this loadout') + '</button></div>' +
     '<div style="display:flex;gap:1.2rem;flex-wrap:wrap">' + half('white') + half('black') + '</div>' +
-    '<p style="color:var(--mute);margin-top:1rem">Using a full set clears that side\'s single pieces, and picking a single piece clears the set. Empty slots use the default pieces.</p>';
+    '<p style="color:var(--mute);margin-top:1rem">Every pawn, knight, bishop and rook has its own slot, so you can show off different skins at once. A full set clears that side\'s single pieces, and picking a single piece clears the set. Empty slots use the default pieces.</p>';
 }
 function loPick(side, key) {
+  const type = key.split('_')[0];
   const rows = loData.inv.map(r => ({ r, it: loData.items.find(i => i.id === r.item_id) })).filter(x => x.it && (x.it.side === 'both' || x.it.side === side) &&
-    (key === 'set' ? x.it.kind === 'set' : (x.it.kind === 'piece' && x.it.piece === key)));
-  $('inspBox').innerHTML = '<h3 style="margin-bottom:.6rem">' + side + ' ' + (key === 'set' ? 'full set' : key) + '</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(100px,1fr));max-height:55vh;overflow:auto">' +
+    (key === 'set' ? x.it.kind === 'set' : (x.it.kind === 'piece' && x.it.piece === type)));
+  $('inspBox').innerHTML = '<h3 style="margin-bottom:.6rem">' + side + ' · ' + slotName(key).toLowerCase() + '</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(100px,1fr));max-height:55vh;overflow:auto">' +
     '<div class="card2" data-pick="" style="cursor:pointer"><div class="cin"><div class="cimg"><div class="boxph">∅</div></div><b>None</b><small style="color:var(--mute);display:block">default</small></div><div class="rbar" style="background:var(--line)"></div></div>' +
     rows.map(x => '<div class="card2" data-pick="' + x.r.id + '" style="cursor:pointer"><div class="cin"><div class="cimg">' + itemImg(x.it, x.r.pattern_seed, 60, x.r.wear) + '</div><b>' + esc(x.it.name) +
       '</b><small style="color:var(--mute);display:block">' + COND(Number(x.r.wear)) + '</small></div><div class="rbar" style="background:' + (RCOL[x.it.rarity] || RCOL.gray) + '"></div></div>').join('') + '</div>' +
@@ -1159,12 +1216,12 @@ function loPick(side, key) {
 async function equip(side, key, invId) {
   const lo = loData.loadouts.find(l => l.slot === loTab); if (!lo) return;
   try {
-    const del = [];
-    if (invId && key === 'set') PIECES.forEach(p => del.push(side + '_' + p));
-    if (invId && key !== 'set') del.push(side + '_set');
-    if (del.length) { const r = await db.from('loadout_slots').delete().eq('loadout_id', lo.id).in('slot_key', del); if (r.error) throw r.error; }
+    const L = () => db.from('loadout_slots').delete().eq('loadout_id', lo.id);
+    if (invId) { const r0 = await L().eq('inventory_id', invId); if (r0.error) throw r0.error; }                    // an item can only sit in one slot
+    if (invId && key === 'set') { const r = await L().like('slot_key', side + '_%').neq('slot_key', side + '_set'); if (r.error) throw r.error; }
+    if (invId && key !== 'set') { const r = await L().eq('slot_key', side + '_set'); if (r.error) throw r.error; }
     const r2 = invId ? await db.from('loadout_slots').upsert({ loadout_id: lo.id, slot_key: side + '_' + key, inventory_id: invId }, { onConflict: 'loadout_id,slot_key' })
-                     : await db.from('loadout_slots').delete().eq('loadout_id', lo.id).eq('slot_key', side + '_' + key);
+                     : await L().eq('slot_key', side + '_' + key);
     if (r2.error) throw r2.error;
   } catch (err) { showErr(err.message); }
   await loadLoadouts(); loRender(); render();
@@ -1178,6 +1235,20 @@ $('loView').addEventListener('click', async e => {
   }
   const c = e.target.closest('.lo'); if (c) loPick(c.dataset.side, c.dataset.key);
 });
+
+// ---------- News / patch notes: shown once, the first time an account opens the site after a new post ----------
+async function checkNews() {
+  const ses = await db.auth.getSession(); if (!ses.data.session) return;
+  const p = await db.from('profiles').select('news_seen_at').eq('id', ses.data.session.user.id).maybeSingle();
+  if (p.error || !p.data) return;
+  const n = await db.from('news').select('*').gt('created_at', p.data.news_seen_at).order('created_at', { ascending: false }).limit(5);
+  if (n.error || !(n.data || []).length) return;
+  $('inspBox').innerHTML = '<h2 style="margin-bottom:.8rem">What\'s new</h2><div style="text-align:left;max-height:55vh;overflow:auto">' + n.data.map(x =>
+    '<div style="margin-bottom:1rem"><b style="color:var(--gold)">' + esc(x.title) + '</b> <small style="color:var(--mute)">' + new Date(x.created_at).toLocaleDateString() +
+    '</small><div style="white-space:pre-wrap">' + esc(x.body) + '</div></div>').join('') + '</div><div class="btns" style="margin-top:1rem"><button class="primary" id="inspClose">Got it</button></div>';
+  $('insp').classList.remove('hidden'); $('inspClose').onclick = () => $('insp').classList.add('hidden');
+  db.rpc('mark_news_seen');
+}
 </script>
 </body>
 </html>
