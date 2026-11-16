@@ -154,6 +154,31 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
 .anline{display:flex;gap:.6rem;align-items:baseline;padding:.35rem .5rem;margin-top:.3rem;background:#0d1a23;border:1px solid var(--line);border-radius:6px;font-size:.85rem}
 .anline b{min-width:3.6rem;color:var(--gold)}
 .anm:hover{color:#fff}
+#opsView{max-width:1240px}
+.opscr{display:grid;grid-template-columns:300px 1fr;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
+.opscr .optop{grid-column:1/3;display:grid;grid-template-columns:300px 1fr auto;align-items:center;background:#33414c;padding:.75rem 0}
+.optop .oqt{text-align:center;font-weight:700}
+.optop .obal{padding:0 1.2rem;font-size:1.1rem} .optop .otl{padding:0 1.4rem;text-align:right}
+.optop .otl .cd{font-size:1.2rem;color:var(--gold);font-variant-numeric:tabular-nums}
+.opscr .oqside{border-right:1px solid var(--line);max-height:660px;overflow:auto}
+.oqs{padding:.6rem .8rem;border-bottom:1px solid var(--line)} .oqs:nth-child(odd){background:rgba(255,255,255,.045)}
+.oqh{display:flex;justify-content:space-between;align-items:baseline;gap:.6rem;margin-bottom:.3rem}
+.oqh span{font-size:.8rem;color:var(--mute);text-align:right} .oqh .cd{color:var(--gold);font-variant-numeric:tabular-nums}
+.oq{background:#0d1a23;border:1px solid var(--line);border-radius:8px;padding:.5rem .6rem;margin-top:.4rem;font-size:.85rem}
+.oq.done{opacity:.55}
+.oqb{height:6px;background:#1a2a35;border-radius:4px;margin:.35rem 0;overflow:hidden} .oqb div{height:100%;background:var(--gold)}
+.oqe{color:var(--mute);font-size:.85rem;padding:.2rem 0}
+.opscr .opmain{padding:1.2rem;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.2rem;align-content:start}
+.otile{position:relative;background:#33414c;border-radius:8px;padding:1rem .8rem 1.5rem;text-align:center;overflow:hidden;min-height:230px;display:flex;flex-direction:column;align-items:center;gap:.35rem}
+.otile .otimg{height:130px;display:grid;place-items:center} .otile small{color:#c4d0d8}
+.otile .rbar{position:absolute;left:0;right:0;bottom:0;height:6px}
+.opscr .opbot{grid-column:1/3;background:#33414c;padding:.7rem 1rem}
+.oplv{display:flex;justify-content:center;gap:1rem;margin-bottom:.4rem}
+.lvbar{height:8px;background:#1f2b34;border-radius:5px;overflow:hidden;margin-bottom:.6rem} .lvbar div{height:100%;background:var(--gold)}
+.lvtrack{display:flex;gap:.4rem;overflow:auto;padding-bottom:.3rem}
+.lvbox{position:relative;flex:0 0 40px;height:40px;display:grid;place-items:center;background:#e9eef1;color:#10202b;border-radius:4px;font-weight:700;cursor:pointer}
+.lvbox.got{background:var(--gold)} .lvbox.has i{position:absolute;right:3px;top:3px;width:8px;height:8px;border-radius:50%;background:#2e9e5b}
+@media (max-width:760px){.opscr{grid-template-columns:1fr}.opscr .optop{grid-column:1;grid-template-columns:1fr;gap:.3rem;text-align:center}.optop .otl{text-align:center}.opscr .opbot{grid-column:1}.opscr .opmain{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -296,6 +321,14 @@ const $ = id => document.getElementById(id);
 
 // ---------- Accounts ----------
 const msg = t => { $('msg').textContent = t; };
+let signedOutByUser = false, clockNote = '';
+function clockWarning(session) {   // a computer with a wrong clock gets signed out the moment it logs in
+  try {
+    const p = JSON.parse(atob(session.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))), d = p.iat - Date.now() / 1000;
+    if (Math.abs(d) > 120) return "This computer's clock is about " + Math.round(Math.abs(d) / 60) + ' minutes ' + (d > 0 ? 'behind' : 'ahead') + ". That makes sign-in fail. Set the date, time and time zone to automatic, then try again.";
+  } catch (e) { /* ignore */ }
+  return '';
+}
 
 async function auth(mode) {
   const email = $('email').value.trim().toLowerCase();
@@ -323,10 +356,11 @@ async function auth(mode) {
       : m);
   }
   if (!r.data.session) msg('Account created. Check your email, click the confirmation link, then log in.');
+  else { clockNote = clockWarning(r.data.session); if (clockNote) msg(clockNote); }
 }
 $('btnLogin').onclick = () => auth('login');
 $('btnSignup').onclick = () => auth('signup');
-$('btnOut').onclick = () => db.auth.signOut();
+$('btnOut').onclick = () => { signedOutByUser = true; db.auth.signOut(); };
 $('pass').addEventListener('keydown', e => { if (e.key === 'Enter') auth('login'); });
 
 async function loadProfile(uid) {
@@ -355,7 +389,11 @@ async function route(session) {
   checkNews();
   loadRatings();
 }
-db.auth.onAuthStateChange((_e, session) => setTimeout(() => route(session), 0));
+db.auth.onAuthStateChange((_e, session) => {
+  if (_e === 'SIGNED_IN') signedOutByUser = false;
+  if (_e === 'SIGNED_OUT' && !signedOutByUser) setTimeout(() => msg(clockNote || 'You were signed out automatically. If this keeps happening on this device, check that its date, time and time zone are correct, allow this site to store data, and refresh the page.'), 60);
+  setTimeout(() => route(session).catch(err => console.error('Startup problem:', err)), 0);
+});
 
 // ---------- Chess ----------
 if (typeof Chess === 'undefined') throw new Error('The chess library did not load. Check your internet connection or ad blocker.');
@@ -376,6 +414,9 @@ overlay.setAttribute('viewBox', '0 0 8 8');
 overlay.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3';
 const VAL = { p: 1, n: 3, b: 3, r: 5, q: 9 };
 const GLYPH = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
+// The black-pawn character is an emoji on some computers (gray, big, same for both colors), so the pawn is drawn instead.
+const pawnSvg = c => '<svg viewBox="0 0 45 45" style="width:1em;height:1em;display:inline-block;vertical-align:middle;overflow:visible" aria-hidden="true"><g fill="' + (c === 'b' ? '#14202a' : '#ffffff') + '" stroke="' + (c === 'b' ? '#c9d6df' : '#14202a') + '" stroke-width="1.8" stroke-linejoin="round"><circle cx="22.5" cy="12.5" r="5.6"/><path d="M18.2 19.5h8.6l-1.1 3c4.2 2.3 7.1 7 7.1 13.5H12.2c0-6.5 2.9-11.2 7.1-13.5z"/><rect x="10.5" y="36.5" width="24" height="4.2" rx="1.6"/></g></svg>';
+const pieceHtml = (t, c) => t === 'p' ? pawnSvg(c) : GLYPH[t] + '\uFE0E';
 
 function kingSquare(color) {
   const rows = game.board();
@@ -428,7 +469,7 @@ function render() {
       s.className = 'pc ' + p.color;
       const e = ids[name] && mode !== 'puzzle' && mode !== 'analysis' && (mode !== 'bot' || p.color === myColor) ? eq[p.color === 'w' ? 'white' : 'black'][ids[name].split(':')[1]] : null;
       if (e && e.item.image_url) s.innerHTML = itemImg(e.item, e.seed, 'calc(var(--bs) / 8 * .72)', e.wear);
-      else s.textContent = GLYPH[p.type] + '\uFE0E';
+      else s.innerHTML = pieceHtml(p.type, p.color);
       d.appendChild(s);
     }
     b.appendChild(d);
@@ -478,7 +519,7 @@ function renderMaterial() {
 function fillCap(id, color, list, adv) {
   const opp = color === 'w' ? 'b' : 'w';
   list.sort((a, b) => VAL[b] - VAL[a]);
-  $(id).innerHTML = list.map(t => '<span class="pc ' + opp + '">' + GLYPH[t] + '\uFE0E</span>').join('') +
+  $(id).innerHTML = list.map(t => '<span class="pc ' + opp + '">' + pieceHtml(t, opp) + '</span>').join('') +
     (adv > 0 ? '<span class="adv">+' + adv + '</span>' : '');
 }
 
@@ -837,9 +878,10 @@ const F = {
           ['wear_range', 'range'], ['brightness', 'bright'], ['is_pattern_based', 'chk'], ['pattern_effect', 'pcfg', FX], ['scratch_black', 'pscr'], ['allow_charms', 'pcharm'], ['board_light', 'pcol'], ['board_dark', 'pcol'], ['name_fx', 'psel', ['none', 'glow', 'pulse', 'rainbow', 'shimmer']], ['name_color', 'pcol'], ['pattern_sheet', 'patsheet'], ['sheet_mode', 'psmode'], ['is_default', 'chk'], ['collection_id', 'coll'], ['image_url', 'img'], ['set_images', 'setimgs']],
   collections: [['name', 'text'], ['description', 'area'], ['is_active_drop', 'chk'], ['image_url', 'img']],
   cases: [['name', 'text'], ['description', 'area'], ['collection_id', 'coll'], ['allow_gold', 'chk'], ['image_url', 'img'], ['key_image_url', 'img']],
-  operations: [['name', 'text'], ['description', 'area'], ['currency_piece', 'sel', PIECES], ['lasts_days', 'dur'], ['image_url', 'img']],
-  operation_quests: [['name', 'text'], ['kind', 'sel', ['win games', 'promote pawns', 'capture pieces', 'give checkmate', 'play games', 'puzzles completed', 'puzzles solved', 'custom']], ['description', 'area'], ['goal', 'int'], ['reward_pawns', 'int'], ['reward_item_id', 'item'], ['reward_case_id', 'case']],
+  operations: [['name', 'text'], ['description', 'area'], ['currency_piece', 'sel', PIECES], ['lasts_days', 'dur'], ['pass_price', 'money'], ['max_level', 'int'], ['xp_per_level', 'int'], ['image_url', 'img']],
+  operation_quests: [['name', 'text'], ['period', 'sel', ['daily', 'weekly', 'monthly', 'operation']], ['kind', 'sel', ['win games', 'promote pawns', 'capture pieces', 'give checkmate', 'play games', 'puzzles completed', 'puzzles solved', 'custom']], ['description', 'area'], ['goal', 'int'], ['reward_xp', 'int'], ['reward_pawns', 'int'], ['reward_item_id', 'item'], ['reward_case_id', 'case']],
   operation_shop: [['item_id', 'item'], ['case_id', 'case'], ['cost_pawns', 'int']],
+  operation_level_rewards: [['level', 'int'], ['reward_pawns', 'int'], ['reward_item_id', 'item'], ['reward_case_id', 'case']],
   shop_keys: [['case_id', 'case'], ['price', 'money']],
   shop_cases: [['case_id', 'case'], ['price', 'money']],
   news: [['title', 'text'], ['body', 'area'], ['image_url', 'img']]
@@ -848,7 +890,8 @@ const TITLE = { items: 'item', collections: 'collection / case', operations: 'op
 const rowName = r => r.name || r.title || (r.case_id ? nameOf(devCases, r.case_id) + (devTab === 'shop_keys' ? ' key' : '') : '');
 let devOpen = false, devTab = 'items', devEdit = null, devRows = [], devItems = [], devColls = [], devCases = [];
 const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const lab = k => k.replace(/_id$/, '').replace(/_/g, ' ');
+const LABELS = { reward_pawns: 'reward currency', cost_pawns: 'price (operation currency)', reward_xp: 'reward XP', xp_per_level: 'XP needed per level', max_level: 'number of levels', pass_price: 'pass price from the player balance (0 = free)', period: 'resets', level: 'reward at level', lasts_days: 'lasts (days from now)' };
+const lab = k => LABELS[k] || k.replace(/_id$/, '').replace(/_/g, ' ');
 const devMsg = (t, bad) => { $('devMsg').style.color = bad ? 'var(--danger)' : 'var(--gold)'; $('devMsg').textContent = t || ''; };
 function devErr(err) {
   const m = err.message || String(err);
@@ -914,8 +957,8 @@ function formHtml(fields, cur, pfx) {
     else if (type === 'area') f += '<textarea' + ida + ' rows="2">' + esc(v) + '</textarea>';
     else if (type === 'num') f += '<input' + ida + ' type="number" min="0" max="1" step="0.01" value="' + (v == null ? 1 : v) + '">';
     else if (type === 'dur') f += '<input' + ida + ' type="number" min="0" step="0.1" value="' + (cur.id ? 0 : 7) + '">' + (cur.ends_at ? '<small style="color:var(--mute)">Currently ends ' + esc(new Date(cur.ends_at).toLocaleString()) + '. 0 keeps it.</small>' : '');
-    else if (type === 'money') f += '<input' + ida + ' type="number" min="0" step="0.01" value="' + (v == null ? 5 : v) + '">';
-    else if (type === 'int') f += '<input' + ida + ' type="number" min="0" step="1" value="' + (v == null ? (k === 'goal' ? 1 : 0) : v) + '">';
+    else if (type === 'money') f += '<input' + ida + ' type="number" min="0" step="0.01" value="' + (v == null ? (k === 'pass_price' ? 0 : 5) : v) + '">';
+    else if (type === 'int') f += '<input' + ida + ' type="number" min="0" step="1" value="' + (v == null ? ({ goal: 1, max_level: 10, xp_per_level: 100, level: 1 }[k] ?? 0) : v) + '">';
     else if (type === 'img') f += '<div class="drop" data-for="' + id + '">' + (v ? 'Image set. Drop a new one to replace it.' : 'Drop an image here, or click') + '</div><input' + ida + ' type="file" accept="image/*" hidden>' +
       (v ? '<img src="' + esc(v) + '" alt="" style="height:48px;margin-top:.4rem">' : '');
     else {
@@ -971,7 +1014,7 @@ async function collect(fields, cur, pfx) {
       row.set_images = o;
     }
     else if (type === 'money') row[k] = Math.max(0, Number(el.value) || 0);
-    else if (type === 'int') row[k] = Math.max(k === 'goal' ? 1 : 0, Math.floor(Number(el.value) || 0));
+    else if (type === 'int') row[k] = Math.max(['goal', 'max_level', 'xp_per_level', 'level'].includes(k) ? 1 : 0, Math.floor(Number(el.value) || 0));
     else if (type === 'coll' || type === 'item' || type === 'case') row[k] = el.value || null;
     else if (type === 'img') row[k] = el.files[0] ? await devUpload(el.files[0], devTab === 'items' && ($('dv_kind') || {}).value === 'piece') : (cur[k] || null);
     else row[k] = el.value.trim();
@@ -1009,17 +1052,27 @@ async function devRender() {
     h += '<div class="sec"><b>Pattern preview</b><div style="display:flex;gap:.8rem;flex-wrap:wrap;margin-top:.5rem">' + [1, 100, 250, 500, 750, 999].map(n => '<div style="text-align:center;background:#9db3c0;border-radius:6px;padding:.4rem"><div style="height:80px;display:grid;place-items:center">' + itemImg(devEdit, n, 76, 0) + '</div><small style="color:#10202b">#' + n + '</small></div>').join('') + '</div></div>';
   }
   if (devTab === 'operations' && devEdit) {
-    const [q, sh] = await Promise.all([db.from('operation_quests').select('*').eq('operation_id', devEdit.id).order('created_at'),
-                                       db.from('operation_shop').select('*').eq('operation_id', devEdit.id).order('created_at')]);
-    if (q.error || sh.error) devErr(q.error || sh.error);
-    h += '<div class="sec"><b>Quests</b>' + (q.data || []).map(r => '<div class="li"><div><b>' + esc(r.name) + '</b><br><small>' + esc(r.kind) + ' · do ' + r.goal + ' · ' + r.reward_pawns + ' pawns' +
-        (r.reward_item_id ? ' · item: ' + esc(nameOf(devItems, r.reward_item_id)) : '') + (r.reward_case_id ? ' · case: ' + esc(nameOf(devCases, r.reward_case_id)) : '') +
-        '</small></div><button data-act="delq" data-id="' + r.id + '">Delete</button></div>').join('') +
-      '<div style="margin-top:.8rem"><b>Add a quest</b>' + formHtml(F.operation_quests, {}, 'qs_') + '<div class="btns" style="margin-top:.6rem"><button data-act="addq">Add quest</button></div></div></div>';
-    h += '<div class="sec"><b>Shop (bought with pawns)</b>' + (sh.data || []).map(r => '<div class="li"><div><b>' + esc(r.item_id ? nameOf(devItems, r.item_id) : nameOf(devCases, r.case_id)) +
-        '</b><br><small>' + (r.item_id ? 'item' : 'case') + ' · ' + r.cost_pawns + ' pawns</small></div><button data-act="dels" data-id="' + r.id + '">Delete</button></div>').join('') +
-      '<div style="margin-top:.8rem"><b>Add to the shop</b> (pick an item or a case)' + formHtml(F.operation_shop, {}, 'sh_') + '<div class="btns" style="margin-top:.6rem"><button data-act="adds">Add to shop</button></div></div></div>';
-  } else if (devTab === 'operations') h += '<p style="color:var(--mute)">Create the operation first, then its quests and shop appear here.</p>';
+    const [q, sh, lv] = await Promise.all([db.from('operation_quests').select('*').eq('operation_id', devEdit.id).order('created_at'),
+      db.from('operation_shop').select('*').eq('operation_id', devEdit.id).order('created_at'),
+      db.from('operation_level_rewards').select('*').eq('operation_id', devEdit.id).order('level')]);
+    if (q.error || sh.error || lv.error) devErr(q.error || sh.error || lv.error);
+    const op = devEdit, cur = (op.currency_piece || 'pawn') + 's';
+    const rw = r => [r.reward_xp ? r.reward_xp + ' XP' : '', r.reward_pawns ? r.reward_pawns + ' ' + cur : '', r.reward_item_id ? 'item: ' + nameOf(devItems, r.reward_item_id) : '', r.reward_case_id ? 'case: ' + nameOf(devCases, r.reward_case_id) : ''].filter(Boolean).join(' · ') || 'no reward';
+    h += '<div class="sec"><b>Summary</b><p style="color:var(--mute);margin:.4rem 0 0">' + (Number(op.pass_price) > 0 ? 'Players pay $' + Number(op.pass_price).toFixed(2) + ' from their balance to join.' : 'Free to join.') +
+      ' ' + op.max_level + ' levels at ' + op.xp_per_level + ' XP each = ' + (op.max_level * op.xp_per_level) + ' XP to finish. Currency: ' + cur + '. Change any of this in the form above and press Save changes.</p></div>';
+    h += '<div class="sec"><b>1. Quests</b><p style="color:var(--mute);margin:.3rem 0 0">Add as many as you like to each group. Daily, weekly and monthly quests reset on their own (00:00 UTC, weeks start Monday). Operation quests are one-time.</p>' +
+      [['daily', 'Daily', 'resets every day'], ['weekly', 'Weekly', 'resets every Monday'], ['monthly', 'Monthly', 'resets on the 1st'], ['operation', 'Operation', 'one-time, lasts the whole operation']].map(([p, t, d]) =>
+        '<div style="margin-top:.8rem"><b>' + t + '</b> <small style="color:var(--mute)">(' + d + ')</small>' + ((q.data || []).filter(r => (r.period || 'operation') === p).map(r =>
+          '<div class="li"><div><b>' + esc(r.name) + '</b><br><small>' + esc(r.kind) + ' · do ' + r.goal + ' · ' + esc(rw(r)) + '</small></div><button data-act="delq" data-id="' + r.id + '">Delete</button></div>').join('') ||
+          '<div style="color:var(--mute);font-size:.85rem">none yet</div>') + '</div>').join('') +
+      '<div style="margin-top:1rem;padding-top:.8rem;border-top:1px solid var(--line)"><b>Add a quest</b>' + formHtml(F.operation_quests, {}, 'qs_') + '<div class="btns" style="margin-top:.6rem"><button class="primary" data-act="addq">Add quest</button></div></div></div>';
+    h += '<div class="sec"><b>2. Level rewards</b><p style="color:var(--mute);margin:.3rem 0 0">Players earn XP from quests. Every ' + op.xp_per_level + ' XP is a level, up to level ' + op.max_level + '. Pick a level and what they get for reaching it.</p>' +
+      ((lv.data || []).map(r => '<div class="li"><div><b>Level ' + r.level + '</b><br><small>' + esc(rw(r)) + '</small></div><button data-act="dell" data-id="' + r.id + '">Delete</button></div>').join('') || '<div style="color:var(--mute);font-size:.85rem;margin-top:.4rem">none yet</div>') +
+      '<div style="margin-top:.8rem"><b>Add a level reward</b>' + formHtml(F.operation_level_rewards, {}, 'lv_') + '<div class="btns" style="margin-top:.6rem"><button class="primary" data-act="addl">Add level reward</button></div></div></div>';
+    h += '<div class="sec"><b>3. Shop tiles</b><p style="color:var(--mute);margin:.3rem 0 0">What players can buy with the operation currency. Pick an item or a case, then the price.</p>' +
+      (sh.data || []).map(r => '<div class="li"><div><b>' + esc(r.item_id ? nameOf(devItems, r.item_id) : nameOf(devCases, r.case_id)) + '</b><br><small>' + (r.item_id ? 'item' : 'case') + ' · ' + r.cost_pawns + ' ' + cur + '</small></div><button data-act="dels" data-id="' + r.id + '">Delete</button></div>').join('') +
+      '<div style="margin-top:.8rem"><b>Add a tile</b>' + formHtml(F.operation_shop, {}, 'sh_') + '<div class="btns" style="margin-top:.6rem"><button class="primary" data-act="adds">Add to shop</button></div></div></div>';
+  } else if (devTab === 'operations') h += '<p style="color:var(--mute)">Create the operation first, then its quests, level rewards and shop appear here.</p>';
   h += '<hr style="border-color:var(--line);margin:1.2rem 0"><b>' + devRows.length + ' existing</b>' + devRows.map(r => '<div class="li">' + (r.image_url ? '<img src="' + esc(r.image_url) + '" alt="">' : '') +
     '<div><b>' + esc(rowName(r)) + '</b><br><small>' + esc(devTab === 'items' ? r.kind + ' · ' + r.rarity + ' · ' + r.side : devTab === 'collections' ? (r.is_active_drop ? 'weekly drop' : 'collection') : devTab === 'news' ? new Date(r.created_at).toLocaleString() : devTab === 'cases' ? 'holds: ' + nameOf(devColls, r.collection_id) + (r.allow_gold ? '' : ' (no gold)') : (devTab === 'shop_keys' || devTab === 'shop_cases') ? '$' + Number(r.price).toFixed(2) : r.currency_piece + ' · ends ' + new Date(r.ends_at).toLocaleString()) + '</small></div>' +
     '<button data-act="edit" data-id="' + r.id + '">Edit</button><button data-act="del" data-id="' + r.id + '">Delete</button></div>').join('');
@@ -1042,10 +1095,10 @@ $('devBody').addEventListener('click', async e => {
     }
     if (a === 'cancel') { devEdit = null; return devRender(); }
     if (a === 'edit') { devEdit = devRows.find(r => r.id === id); return devRender(); }
-    if (a === 'del' || a === 'delq' || a === 'dels') {
+    if (a === 'del' || a === 'delq' || a === 'dels' || a === 'dell') {
       const wipe = a === 'del' && devTab === 'items';
       if (!confirm(wipe ? 'Delete this item from the whole game? It is removed from EVERY player\'s inventory and loadouts, and this cannot be undone.' : 'Delete this?')) return;
-      const { error } = wipe ? await db.rpc('dev_delete_item', { p_item: id }) : await db.from(a === 'del' ? devTab : a === 'delq' ? 'operation_quests' : 'operation_shop').delete().eq('id', id);
+      const { error } = wipe ? await db.rpc('dev_delete_item', { p_item: id }) : await db.from(a === 'del' ? devTab : a === 'delq' ? 'operation_quests' : a === 'dell' ? 'operation_level_rewards' : 'operation_shop').delete().eq('id', id);
       if (error) throw error;
       if (a === 'del') devEdit = null;
       devMsg('Deleted.'); return devRender();
@@ -1063,11 +1116,12 @@ $('devBody').addEventListener('click', async e => {
       devEdit = devTab === 'operations' ? r.data : null;
       await devRender(); return devMsg('Saved.');
     }
-    if (a === 'addq' || a === 'adds') {
-      const t = a === 'addq' ? 'operation_quests' : 'operation_shop', p = a === 'addq' ? 'qs_' : 'sh_';
+    if (a === 'addq' || a === 'adds' || a === 'addl') {
+      const t = a === 'addq' ? 'operation_quests' : a === 'adds' ? 'operation_shop' : 'operation_level_rewards', p = a === 'addq' ? 'qs_' : a === 'adds' ? 'sh_' : 'lv_';
       const row = await collect(F[t], {}, p); row.operation_id = devEdit.id;
       if (t === 'operation_quests' && !row.name) throw new Error('Name the quest first.');
       if (t === 'operation_shop' && !(row.item_id || row.case_id)) throw new Error('Pick an item or a case.');
+      if (t === 'operation_level_rewards' && !(row.reward_pawns || row.reward_item_id || row.reward_case_id)) throw new Error('Give this level a reward (currency, an item, or a case).');
       const { error } = await db.from(t).insert(row);
       if (error) throw error;
       await devRender(); return devMsg('Added.');
@@ -1114,7 +1168,12 @@ function fmtLeft(ms) {
   const t = Math.floor(ms / 1000), p = n => String(n).padStart(2, '0'), d = Math.floor(t / 86400);
   return (d ? d + 'd ' : '') + p(Math.floor(t % 86400 / 3600)) + ':' + p(Math.floor(t % 3600 / 60)) + ':' + p(t % 60);
 }
-function tick() { document.querySelectorAll('.op .cd').forEach(el => { el.textContent = fmtLeft(new Date(el.dataset.end) - Date.now()); }); }
+function tick() {
+  document.querySelectorAll('.cd').forEach(el => {
+    const ms = new Date(el.dataset.end) - Date.now(); el.textContent = fmtLeft(ms);
+    if (ms <= 0 && el.dataset.reload && !el.dataset.fired) { el.dataset.fired = '1'; if (view.startsWith('op:')) setTimeout(() => opRender(view.slice(3)), 1500); }   // a quest group just reset
+  });
+}
 setInterval(() => {
   const gone = ops.filter(o => new Date(o.ends_at) <= Date.now());
   if (gone.length) { ops = ops.filter(o => !gone.includes(o)); if (view.startsWith('op:') && !ops.find(o => 'op:' + o.id === view)) showView('play'); else navRender(); }
@@ -1122,25 +1181,93 @@ setInterval(() => {
 }, 1000);
 setInterval(() => { if (!$('app').classList.contains('hidden')) loadOps(); }, 60000);
 
+const OP_PERIODS = [['daily', 'Daily'], ['weekly', 'Weekly'], ['monthly', 'Monthly'], ['operation', 'Operation']];
+function periodKey(p) {   // must match the database: resets happen at 00:00 UTC, weeks start on Monday
+  const d = new Date();
+  if (p === 'daily') return d.toISOString().slice(0, 10);
+  if (p === 'weekly') { const w = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())); w.setUTCDate(w.getUTCDate() - ((w.getUTCDay() + 6) % 7)); return w.toISOString().slice(0, 10); }
+  if (p === 'monthly') return d.toISOString().slice(0, 7);
+  return 'op';
+}
+function periodEnd(p, op) {
+  const d = new Date(), t = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  let e = p === 'daily' ? new Date(t + 864e5) : p === 'weekly' ? new Date(t + (7 - ((d.getUTCDay() + 6) % 7)) * 864e5) : p === 'monthly' ? new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)) : new Date(op.ends_at);
+  const end = new Date(op.ends_at); return e > end ? end : e;
+}
+let opLv = {};
 async function opRender(id) {
   const op = ops.find(o => o.id === id); if (!op) return;
-  const [q, sh, it, co, pg, bl] = await Promise.all([
+  const ses = await db.auth.getSession(); if (!ses.data.session) return;
+  const uid = ses.data.session.user.id;
+  const [q, sh, it, cs, pg, bl, xp, lv, ps] = await Promise.all([
     db.from('operation_quests').select('*').eq('operation_id', id).order('created_at'), db.from('operation_shop').select('*').eq('operation_id', id).order('created_at'),
-    db.from('items').select('id,name'), db.from('cases').select('id,name'),
-    db.from('operation_progress').select('quest_id,progress,done'), db.from('operation_balances').select('amount').eq('operation_id', id).maybeSingle()]);
+    db.from('items').select('*'), db.from('cases').select('*'),
+    db.from('operation_progress').select('quest_id,progress,done,period_key').eq('owner_id', uid),
+    db.from('operation_balances').select('amount').eq('operation_id', id).eq('owner_id', uid).maybeSingle(),
+    db.from('operation_xp').select('xp').eq('operation_id', id).eq('owner_id', uid).maybeSingle(),
+    db.from('operation_level_rewards').select('*').eq('operation_id', id).order('level'),
+    db.from('operation_pass').select('operation_id').eq('operation_id', id).eq('owner_id', uid).maybeSingle()]);
   if (view !== 'op:' + id) return;
-  const g = GLYPH[CURG[op.currency_piece] || 'p'] + '\uFE0E', nm = (list, x) => { const r = (list || []).find(y => y.id === x); return r ? r.name : '?'; };
-  const prog = {}; (pg.data || []).forEach(r => { prog[r.quest_id] = r; });
-  $('opsView').innerHTML = '<div class="op"><div class="row2"><div><h3>' + esc(op.name) + '</h3><div style="color:var(--mute)">' + esc(op.description) + '</div></div>' +
-    '<div style="text-align:right"><div class="cd" data-end="' + esc(op.ends_at) + '"></div><div style="color:var(--mute);font-size:.8rem">time left</div></div></div>' +
-    '<p>You have <span class="cur">' + g + '</span> <b>' + ((bl.data && bl.data.amount) || 0) + '</b></p>' +
-    '<b>Quests</b>' + (q.data || []).map(x => { const p = prog[x.id] || { progress: 0, done: false }, pct = Math.round(100 * p.progress / x.goal);
-      return '<div class="li" style="display:block;margin-top:.5rem;padding:.6rem;border:1px solid var(--line);border-radius:8px"><b>' + esc(x.name) + '</b> <small style="color:var(--mute)">' + esc(x.kind) + '</small>' + (x.description ? '<div style="color:var(--mute)">' + esc(x.description) + '</div>' : '') +
-        '<div style="background:#0d1a23;border-radius:6px;height:8px;margin:.4rem 0"><div style="width:' + pct + '%;background:var(--gold);height:100%;border-radius:6px"></div></div>' +
-        '<small>' + (p.done ? 'Done' : p.progress + ' / ' + x.goal) + ' · pays ' + x.reward_pawns + ' ' + g + (x.reward_item_id ? ' + ' + esc(nm(it.data, x.reward_item_id)) : '') + (x.reward_case_id ? ' + ' + esc(nm(co.data, x.reward_case_id)) + ' case' : '') + '</small></div>'; }).join('') +
-    '<p style="margin-top:1rem"><b>Shop</b></p><ul style="color:var(--mute)">' + (sh.data || []).map(x => '<li>' + esc(x.item_id ? nm(it.data, x.item_id) : nm(co.data, x.case_id)) + ' for ' + x.cost_pawns + ' ' + g + '</li>').join('') + '</ul></div>';
+  const price = Number(op.pass_price) || 0;
+  if (price > 0 && !ps.data) {   // pass required
+    $('opsView').innerHTML = '<div class="op" style="text-align:center;max-width:520px;margin:2rem auto"><h2>' + esc(op.name) + '</h2>' +
+      (op.image_url ? '<img src="' + esc(op.image_url) + '" alt="" draggable="false" style="max-width:100%;max-height:220px;object-fit:contain;margin:.6rem 0">' : '') +
+      '<p style="color:var(--mute)">' + esc(op.description) + '</p><p>Ends in <span class="cd" data-end="' + esc(op.ends_at) + '"></span></p>' +
+      '<p style="color:var(--mute)">' + (op.max_level || 0) + ' levels, daily, weekly and monthly quests, and an exclusive shop.</p>' +
+      '<button class="primary" data-pass="' + id + '">Buy the pass for $' + price.toFixed(2) + '</button><p style="color:var(--mute);font-size:.85rem;margin-top:.6rem">It comes out of your account balance.</p></div>';
+    tick(); return;
+  }
+  const items = it.data || [], cases = cs.data || [], byId = (l, x) => l.find(r => r.id === x) || {};
+  const g = '<span class="pc w" style="font-size:1.4rem;vertical-align:middle">' + pieceHtml(CURG[op.currency_piece] || 'p', 'w') + '</span>';
+  const bal = (bl.data && bl.data.amount) || 0, per = Math.max(1, op.xp_per_level || 100), maxL = Math.max(1, op.max_level || 10), xpv = (xp.data && xp.data.xp) || 0;
+  const level = Math.min(maxL, Math.floor(xpv / per)), into = level >= maxL ? per : xpv % per;
+  const rewText = r => [r.reward_xp ? '+' + r.reward_xp + ' XP' : '', r.reward_pawns ? '+' + r.reward_pawns + ' ' + (op.currency_piece || 'pawn') + 's' : '', r.reward_item_id ? byId(items, r.reward_item_id).name : '', r.reward_case_id ? byId(cases, r.reward_case_id).name + ' case' : ''].filter(Boolean).join(' · ');
+  const prog = {}; (pg.data || []).forEach(r => { prog[r.quest_id + '|' + r.period_key] = r; });
+  const side = OP_PERIODS.map(([p, label]) => {
+    const list = (q.data || []).filter(x => (x.period || 'operation') === p);
+    return '<div class="oqs"><div class="oqh"><b>' + label + '</b><span>' + (p === 'operation' ? 'ends in' : 'resets in') + ' <span class="cd" data-reload="1" data-end="' + periodEnd(p, op).toISOString() + '"></span></span></div>' +
+      (list.map(x => { const r = prog[x.id + '|' + periodKey(p)] || { progress: 0, done: false }, pct = Math.min(100, Math.round(100 * r.progress / Math.max(1, x.goal)));
+        return '<div class="oq' + (r.done ? ' done' : '') + '"><b>' + esc(x.name) + '</b>' + (x.description ? '<div style="color:var(--mute)">' + esc(x.description) + '</div>' : '') +
+          '<div class="oqb"><div style="width:' + pct + '%"></div></div><small>' + (r.done ? 'Done' : r.progress + ' / ' + x.goal) + ' · ' + esc(rewText(x) || 'no reward') + '</small></div>'; }).join('') || '<div class="oqe">No quests right now.</div>') + '</div>';
+  }).join('');
+  const tiles = (sh.data || []).map(x => {
+    const itm = x.item_id ? byId(items, x.item_id) : null, cse = x.case_id ? byId(cases, x.case_id) : null;
+    const img = itm ? itemImg(itm, 1, 120, 0) : (cse && cse.image_url ? '<img src="' + esc(cse.image_url) + '" alt="" draggable="false" style="max-height:120px;max-width:100%;object-fit:contain">' : '<div class="boxph" style="font-size:5rem">▣</div>');
+    return '<div class="otile"><div class="otimg">' + img + '</div><b>' + esc(itm ? itm.name : cse ? cse.name : '?') + '</b><small>' + (itm ? 'Item · ' + esc(itm.rarity) : 'Case') + '</small>' +
+      '<button class="primary" data-optile="' + x.id + '"' + (bal >= x.cost_pawns ? '' : ' disabled') + '>' + x.cost_pawns + ' ' + g + '</button><div class="rbar" style="background:' + (itm ? RCOL[itm.rarity] || RCOL.gray : RCOL.gray) + '"></div></div>';
+  }).join('') || '<p style="color:var(--mute)">Nothing in the shop yet.</p>';
+  opLv = {}; const lvRew = lv.data || [];
+  const track = Array.from({ length: maxL }, (_, i) => i + 1).map(n => {
+    const rs = lvRew.filter(r => r.level === n); opLv[n] = 'Level ' + n + ': ' + (rs.map(rewText).join(' | ') || 'no reward');
+    return '<div class="lvbox' + (n <= level ? ' got' : '') + (rs.length ? ' has' : '') + '" data-lv="' + n + '" title="' + esc(opLv[n]) + '">' + n + (rs.length ? '<i></i>' : '') + '</div>';
+  }).join('');
+  const nxt = lvRew.find(r => r.level > level);
+  $('opsView').innerHTML = '<div class="opscr"><div class="optop"><div class="oqt">Quests</div><div class="obal">Balance ' + g + ' <b>' + bal + '</b></div>' +
+    '<div class="otl">Time left in operation<br><span class="cd" data-end="' + esc(op.ends_at) + '"></span></div></div>' +
+    '<div class="oqside">' + side + '</div><div class="opmain">' + tiles + '</div>' +
+    '<div class="opbot"><div class="oplv"><b>Operation Level ' + level + '</b><span>' + (level >= maxL ? 'MAX' : into + ' / ' + per + ' XP') + '</span></div>' +
+    '<div class="lvbar"><div style="width:' + (level >= maxL ? 100 : Math.round(100 * into / per)) + '%"></div></div><div class="lvtrack" id="lvTrack">' + track + '</div>' +
+    '<div id="lvInfo" class="oqe" style="margin-top:.3rem">' + (nxt ? 'Next reward, level ' + nxt.level + ': ' + esc(rewText(nxt)) + '. Click any level to see its reward.' : 'Click any level to see its reward.') + '</div></div></div>';
   tick();
+  const tr = $('lvTrack'); if (tr && level > 4) tr.scrollLeft = (level - 3) * 44;
 }
+$('opsView').addEventListener('click', async e => {
+  const lvb = e.target.closest('[data-lv]'); if (lvb) { $('lvInfo').textContent = opLv[lvb.dataset.lv] || ''; return; }
+  const pass = e.target.closest('[data-pass]');
+  if (pass) {
+    pass.disabled = true;
+    const { error } = await db.rpc('buy_operation_pass', { p_op: pass.dataset.pass });
+    if (error) { pass.disabled = false; return showErr(error.message); }
+    const ses = await db.auth.getSession(); if (ses.data.session) loadProfile(ses.data.session.user.id);
+    opRender(pass.dataset.pass); return;
+  }
+  const t = e.target.closest('[data-optile]'); if (!t) return;
+  t.disabled = true;
+  const { error } = await db.rpc('buy_operation_item', { p_listing: t.dataset.optile });
+  if (error) { t.disabled = false; return showErr(error.message); }
+  t.textContent = 'Bought!';
+  setTimeout(() => { if (view.startsWith('op:')) opRender(view.slice(3)); }, 500);
+});
 async function shopRender() {
   const [sc, sk, cs] = await Promise.all([db.from('shop_cases').select('*').order('created_at'), db.from('shop_keys').select('*').order('created_at'), db.from('cases').select('*')]);
   if (view !== 'shop') return;
@@ -1213,7 +1340,7 @@ function itemImg(it, seed, h, wear) {
   const tf = p.t ? 'transform:' + p.t + ';' : '';
   const iu = it.image_url || (it.set_images && (it.set_images.pawn || Object.values(it.set_images)[0]));
   if (!iu && it.kind === 'board') { const bc = it.pattern_config || {}; return '<div style="width:' + hh + ';height:' + hh + ';border-radius:4px;background:repeating-conic-gradient(' + esc(bc.board_light || '#e6ecef') + ' 0 25%,' + esc(bc.board_dark || '#6f8ea3') + ' 0 50%) 0 0/50% 50%"></div>'; }
-  if (!iu) return '<div class="pc ' + (it.side === 'black' ? 'b' : 'w') + '" style="height:' + hh + ';display:grid;place-items:center;font-size:' + (typeof h === 'number' ? h * 0.7 : 40) + 'px;filter:' + filt + ';' + tf + '">' + GLYPH[CURG[it.piece] || 'p'] + '\uFE0E</div>';
+  if (!iu) return '<div class="pc ' + (it.side === 'black' ? 'b' : 'w') + '" style="height:' + hh + ';display:grid;place-items:center;font-size:' + (typeof h === 'number' ? h * 0.7 : 40) + 'px;filter:' + filt + ';' + tf + '">' + pieceHtml(CURG[it.piece] || 'p', it.side === 'black' ? 'b' : 'w') + '</div>';
   const u = esc(iu), mask = "-webkit-mask:url('" + u + "') center/contain no-repeat;mask:url('" + u + "') center/contain no-repeat;";
   const lt = it.pattern_config && it.pattern_config.scratch_black ? ' lt' : '';
   const pc = pcfg;
@@ -1365,7 +1492,7 @@ function loRender() {
   const cell = (side, key) => {
     const s = loData.slots.find(x => x.loadout_id === lo.id && x.slot_key === slotId(side, key));
     const r = s && loData.inv.find(i => i.id === s.inventory_id), it = r && loData.items.find(i => i.id === r.item_id);
-    const img = it ? itemImg(it, r.pattern_seed, 52, r.wear) : (key === 'set' || key === 'board' || key === 'flair' || key === 'name_effect') ? '<div class="boxph">∅</div>' : '<div class="pc ' + (side === 'black' ? 'b' : 'w') + '" style="font-size:2.4rem;line-height:1">' + GLYPH[CURG[key.split('_')[0]]] + '\uFE0E</div>';
+    const img = it ? itemImg(it, r.pattern_seed, 52, r.wear) : (key === 'set' || key === 'board' || key === 'flair' || key === 'name_effect') ? '<div class="boxph">∅</div>' : '<div class="pc ' + (side === 'black' ? 'b' : 'w') + '" style="font-size:2.4rem;line-height:1">' + pieceHtml(CURG[key.split('_')[0]], side === 'black' ? 'b' : 'w') + '</div>';
     return '<div class="card2 lo" data-side="' + side + '" data-key="' + key + '" style="cursor:pointer"><div class="cin" style="padding:.35rem .3rem"><div class="cimg" style="height:58px">' + img + '</div><b>' + slotName(key) +
       '</b><small style="color:var(--mute);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (it ? esc(it.name) : 'Default') + '</small></div><div class="rbar" style="background:' + (it ? RCOL[it.rarity] || RCOL.gray : 'var(--line)') + '"></div></div>';
   };
