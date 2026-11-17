@@ -214,6 +214,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
       <span>Level <b id="sLvl">-</b></span>
       <span>Balance <b id="sBal">-</b></span>
     </div>
+    <span class="sndctl" style="display:inline-flex;align-items:center;gap:.4rem"><label class="sw" style="margin:0" title="Sound on or off"><input type="checkbox" id="sndOn" checked><span class="knob"></span></label><input type="range" id="sndVol" min="0" max="100" value="70" style="width:80px" title="Volume"></span>
     <button id="btnOut">Log out</button>
   </header>
   <nav id="nav"></nav>
@@ -410,7 +411,8 @@ let profElo = null, devAdmin = false;
 let pre = null, questPly = 0;
 let clock = null, curPen = { s: 0, d: 0, t: 1, r: 0 }, flagging = false;
 let ratings = {};
-let eqBoard = { white: null, black: null }, eqFlair = null, eqName = null;
+let eqBoard = { white: null, black: null }, eqFlair = null, eqName = null, eqSound = null;
+let sndOn = true, sndVol = 0.7;
 let eq = { white: {}, black: {} }, loData = { loadouts: [], slots: [], inv: [], items: [], active: 1 }, loTab = 1;
 const T2N = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };                                   // queued premove {from,to}
 let arrows = [], marks = [], drawFrom = null, drawTo = null, drawColor = '#2e9e5b';
@@ -485,6 +487,7 @@ function render() {
   drawOverlay();
   renderMaterial();
   renderStatus();
+  moveSound();
 }
 
 function renderStatus() {
@@ -642,6 +645,8 @@ function showResult(i) {
     if (xr.medal) $('ovNote').textContent = 'You earned the ' + xr.medal.year + ' medal, tier ' + xr.medal.tier + '! Your level reset to 1.';
     else if (xr.level_ups) $('ovNote').textContent = 'Level up! Check the Weekly tab for your weekly drop.';
   }
+  playSound(i.result === 'win' ? 'win' : i.result === 'draw' ? 'draw' : 'loss');
+  if (xr && xr.level_ups) setTimeout(() => playSound('level_up'), 900);
   $('ov').classList.remove('hidden');
 }
 $('ovClose').onclick = () => $('ov').classList.add('hidden');
@@ -865,6 +870,7 @@ $('btnBot').onclick = async () => {
   if (error) return showErr(error.message);
   game.reset(); sel = null; legal = []; last = []; pre = null; clearDrawings(); $('ov').classList.add('hidden');
   questPly = 0;
+  playSound('game_start');
   clock = tc.none ? null : { ms: { w: tc.min * 60000, b: tc.min * 60000 }, inc: tc.inc * 1000, n: 0, t0: Date.now(), cat: tcCat(), over: false };
   mode = 'bot'; bot = b; botGame = data; myColor = c === 'white' ? 'w' : 'b'; flipped = c === 'black';
   render();
@@ -881,13 +887,14 @@ $('btnResign').onclick = async () => {
 };
 
 // ---------- Dev tool (only shows for admin accounts; Supabase enforces is_admin on every save) ----------
-const KINDS = ['piece', 'set', 'charm', 'board', 'clock skin', 'username effect', 'win effect', 'loss effect', 'checkmate effect', 'draw effect', 'flair'];
+const KINDS = ['piece', 'set', 'charm', 'board', 'clock skin', 'username effect', 'win effect', 'loss effect', 'checkmate effect', 'draw effect', 'flair', 'sound kit'];
+const SOUND_EVENTS = [['move', 'Piece move'], ['capture', 'Capture'], ['castle', 'Castling'], ['check', 'Check'], ['promote', 'Promotion'], ['checkmate', 'Checkmate'], ['game_start', 'Game start'], ['win', 'You win'], ['loss', 'You lose'], ['draw', 'Draw'], ['low_time', 'Under 10 seconds'], ['puzzle_correct', 'Puzzle solved'], ['puzzle_wrong', 'Puzzle failed'], ['case_tick', 'Case roll tick'], ['case_reveal', 'Case reveal'], ['level_up', 'Level up'], ['purchase', 'Purchase'], ['claim', 'Claim a drop']];
 const RARITIES = ['gray', 'light blue', 'blue', 'purple', 'pink', 'red', 'gold'];
 const PIECES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'];
 const FX = ['none', 'color change', 'size change', 'brightness', 'pattern sheet'];
 const F = {
   items: [['name', 'text'], ['description', 'area'], ['kind', 'sel', KINDS], ['piece', 'sel', PIECES], ['rarity', 'sel', RARITIES], ['side', 'sel', ['both', 'white', 'black']],
-          ['wear_range', 'range'], ['brightness', 'bright'], ['is_pattern_based', 'chk'], ['pattern_effect', 'pcfg', FX], ['scratch_black', 'pscr'], ['allow_charms', 'pcharm'], ['board_light', 'pcol'], ['board_dark', 'pcol'], ['name_fx', 'psel', ['none', 'glow', 'pulse', 'rainbow', 'shimmer']], ['name_color', 'pcol'], ['pattern_sheet', 'patsheet'], ['sheet_mode', 'psmode'], ['is_default', 'chk'], ['collection_id', 'coll'], ['image_url', 'img'], ['set_images', 'setimgs']],
+          ['wear_range', 'range'], ['brightness', 'bright'], ['is_pattern_based', 'chk'], ['pattern_effect', 'pcfg', FX], ['scratch_black', 'pscr'], ['allow_charms', 'pcharm'], ['board_light', 'pcol'], ['board_dark', 'pcol'], ['name_fx', 'psel', ['none', 'glow', 'pulse', 'rainbow', 'shimmer']], ['name_color', 'pcol'], ['pattern_sheet', 'patsheet'], ['sheet_mode', 'psmode'], ['is_default', 'chk'], ['collection_id', 'coll'], ['image_url', 'img'], ['set_images', 'setimgs'], ['sound_kit', 'sndkit']],
   collections: [['name', 'text'], ['description', 'area'], ['is_active_drop', 'chk'], ['image_url', 'img']],
   cases: [['name', 'text'], ['description', 'area'], ['collection_id', 'coll'], ['allow_gold', 'chk'], ['image_url', 'img'], ['key_image_url', 'img']],
   operations: [['name', 'text'], ['description', 'area'], ['currency_piece', 'sel', PIECES], ['lasts_days', 'dur'], ['pass_price', 'money'], ['max_level', 'int'], ['xp_per_level', 'int'], ['image_url', 'img']],
@@ -908,7 +915,7 @@ const devMsg = (t, bad) => { $('devMsg').style.color = bad ? 'var(--danger)' : '
 function devErr(err) {
   const m = err.message || String(err);
   devMsg(/row-level security|permission|policy/i.test(m) ? 'Not allowed: this account is not an admin in Supabase.' :
-         /does not exist|schema cache|relation/i.test(m) ? 'A database table is missing. Run the SQL step first. (' + m + ')' : m, true);
+         /does not exist|schema cache/i.test(m) ? 'A database table is missing. Run the SQL step first. (' + m + ')' : m, true);
 }
 document.addEventListener('keydown', e => {
   if (e.key !== ';' || !devAdmin || /^(INPUT|TEXTAREA|SELECT)$/.test((e.target || {}).tagName || '')) return;
@@ -934,6 +941,12 @@ function formHtml(fields, cur, pfx) {
   for (const [k, type, opts] of fields) {
     const v = type === 'pcfg' ? (cur.pattern_config || {}).effect : type === 'pscr' ? (cur.pattern_config || {}).scratch_black : type === 'patsheet' ? (cur.pattern_config || {}).sheet_url : type === 'psmode' ? (cur.pattern_config || {}).sheet_mode : type === 'pcharm' ? (cur.pattern_config || {}).allow_charms : (type === 'pcol' || type === 'psel') ? (cur.pattern_config || {})[k] : cur[k], id = pfx + k, ida = ' id="' + id + '"';
     if (type === 'chk') { f += '<label><input' + ida + ' type="checkbox"' + (v ? ' checked' : '') + '>' + lab(k) + '</label>'; continue; }
+    if (type === 'sndkit') {
+      const sv = (cur.pattern_config || {}).sounds || {};
+      f += '<div id="sndWrap" style="display:' + (cur.kind === 'sound kit' ? 'block' : 'none') + '"><label>sound kit: one audio file per event (mp3, wav or ogg)</label><div class="drop" data-for="dv_snd_bulk">Drop ALL the sound files here at once. Name each file after its event (move.wav, capture.mp3, ...)</div><input id="dv_snd_bulk" type="file" accept="audio/*" multiple hidden>' +
+        SOUND_EVENTS.map(([k, t]) => '<label for="dv_snd_' + k + '" style="margin-top:.2rem">' + t + ' <small>(' + k + ')</small>' + (sv[k] ? ' <a href="#" data-playsnd="' + esc(sv[k]) + '">play</a>' : '') + '</label><div class="drop" data-for="dv_snd_' + k + '">' + (sv[k] ? 'Sound set. Drop a new one to replace it.' : 'Drop a sound here, or click') + '</div><input id="dv_snd_' + k + '" type="file" accept="audio/*" hidden>').join('') + '</div>';
+      continue;
+    }
     if (type === 'pcol') {
       const dflt = { board_light: '#e6ecef', board_dark: '#6f8ea3', name_color: '#f0b429' }[k] || '#ffffff';
       f += '<label for="' + id + '">' + lab(k) + ({ board_light: ' (boards)', board_dark: ' (boards)', name_color: ' (name effects)' }[k] || '') + '</label><input' + ida + ' type="color" value="' + esc(v || dflt) + '" style="height:2.4rem;padding:.2rem">';
@@ -1014,12 +1027,17 @@ async function collect(fields, cur, pfx) {
     if (type === 'chk') row[k] = el.checked;
     else if (type === 'num') row[k] = Math.min(1, Math.max(0, el.value === '' ? 1 : Number(el.value)));
     else if (type === 'dur') row[k] = Math.max(0, Number(el.value) || 0);
+    else if (type === 'sndkit') {
+      const o = Object.assign({}, (cur.pattern_config || {}).sounds || {});
+      for (const [k] of SOUND_EVENTS) { const fi = $('dv_snd_' + k); if (fi && fi.files[0]) o[k] = await devUpload(fi.files[0], false); }
+      row.pattern_config = Object.assign({}, row.pattern_config, { sounds: o });
+    }
     else if (type === 'pcol' || type === 'psel') row.pattern_config = Object.assign({}, row.pattern_config, { [k]: el.value });
     else if (type === 'bright') row.pattern_config = Object.assign({}, row.pattern_config, { brightness: Number(el.value) });
     else if (type === 'pcharm') row.pattern_config = Object.assign({}, row.pattern_config, { allow_charms: el.checked });
     else if (type === 'psmode') row.pattern_config = Object.assign({}, row.pattern_config, { sheet_mode: el.value });
     else if (type === 'patsheet') { const sf = el.files[0]; row.pattern_config = Object.assign({}, row.pattern_config, { sheet_url: sf ? await devUpload(sf, false) : (cur.pattern_config || {}).sheet_url || null }); }
-    else if (type === 'range') { row.wear_min = Number($(pfx + 'wear_min').value); row.wear_max = Number($(pfx + 'wear_max').value); row.wear_cap = row.wear_max; }
+    else if (type === 'range') { row.wear_min = Number($(pfx + 'wear_min').value); row.wear_max = Number($(pfx + 'wear_max').value); row.wear_cap = Math.max(0.01, row.wear_max); }
     else if (type === 'pcfg') row.pattern_config = Object.assign({}, row.pattern_config, { effect: el.value.trim() });
     else if (type === 'pscr') row.pattern_config = Object.assign({}, row.pattern_config, { scratch_black: el.checked });
     else if (type === 'setimgs') {
@@ -1095,10 +1113,19 @@ async function devRender() {
   $('devBody').innerHTML = h;
 }
 $('devBody').addEventListener('click', async e => {
+  const pl = e.target.closest('[data-playsnd]'); if (pl) { e.preventDefault(); try { new Audio(pl.dataset.playsnd).play(); } catch (x) { /* ignore */ } return; }
   const dz = e.target.closest('.drop'); if (dz) { $(dz.dataset.for).click(); return; }
   const b = e.target.closest('[data-act]'); if (!b) return;
   const a = b.dataset.act, id = b.dataset.id;
   try {
+    if (a === 'wkxadd') {
+      const it = $('wxe_item').value, cs = $('wxe_case').value, ch = Number($('wxe_chance').value);
+      if (!!it === !!cs) throw new Error('Pick either an item or a case, not both.');
+      if (!(ch > 0)) throw new Error('Set a chance above 0.');
+      const r = await db.from('weekly_extras').insert({ item_id: it || null, case_id: cs || null, chance: Math.min(100, ch) }); if (r.error) throw r.error;
+      devMsg('Added.'); return devWeekly();
+    }
+    if (a === 'wkxdel') { const r = await db.from('weekly_extras').delete().eq('id', id); if (r.error) throw r.error; devMsg('Removed.'); return devWeekly(); }
     if (a === 'wkxp') {
       const n = id => Number($(id).value) || 0, tiers = [];
       for (let i = 0; i < 5; i++) { const m = Number($('wx_m' + i).value), u = $('wx_u' + i).value; if (m > 0) tiers.push({ upto: u === '' ? null : Number(u), mult: m }); }
@@ -1131,7 +1158,7 @@ $('devBody').addEventListener('click', async e => {
       if (ex.data && ex.data.item_id) { const upd = { name }; if (url) upd.image_url = url; const r = await db.from('items').update(upd).eq('id', ex.data.item_id); if (r.error) throw r.error; }
       else {
         if (!url) throw new Error('Add the flair image.');
-        const ins = await db.from('items').insert({ name, description: year + ' service medal, tier ' + tier, kind: 'flair', piece: 'pawn', side: 'both', rarity: 'gold', wear_cap: 0, wear_min: 0, wear_max: 0,
+        const ins = await db.from('items').insert({ name, description: year + ' service medal, tier ' + tier, kind: 'flair', piece: 'pawn', side: 'both', rarity: 'gold', wear_cap: 1, wear_min: 0, wear_max: 0,
           is_pattern_based: false, pattern_config: { allow_charms: true }, is_default: false, image_url: url }).select().single();
         if (ins.error) throw ins.error;
         const d = await db.from('medal_defs').upsert({ year, tier, item_id: ins.data.id }); if (d.error) throw d.error;
@@ -1190,11 +1217,27 @@ $('devBody').addEventListener('click', async e => {
   } catch (err) { devErr(err); }
 });
 function dropShow(el, files) { const dz = document.querySelector('.drop[data-for="' + el.id + '"]'); if (dz && files[0]) { dz.textContent = 'Ready: ' + files[0].name; dz.classList.add('on'); } }
-$('devBody').addEventListener('change', e => { if (e.target.type === 'file') dropShow(e.target, e.target.files); });
+function sndBulk(files) {   // match each dropped file to an event by its file name
+  let n = 0;
+  for (const f of files) {
+    const base = f.name.replace(/\.[^.]+$/, '').toLowerCase().replace(/[\s-]+/g, '_');
+    const ev = SOUND_EVENTS.find(([k]) => k === base) || SOUND_EVENTS.filter(([k]) => base.includes(k)).sort((a, b) => b[0].length - a[0].length)[0];
+    if (!ev) continue;
+    const inp = $('dv_snd_' + ev[0]); if (!inp) continue;
+    const dt = new DataTransfer(); dt.items.add(f); inp.files = dt.files; dropShow(inp, inp.files); n++;
+  }
+  devMsg(n + ' of ' + files.length + ' files matched an event. Press Save changes (or Create) to upload them.', n < files.length);
+}
+$('devBody').addEventListener('change', e => {
+  if (e.target.id === 'dv_kind') { const w = $('sndWrap'); if (w) w.style.display = e.target.value === 'sound kit' ? 'block' : 'none'; return; }
+  if (e.target.id === 'dv_snd_bulk') { sndBulk(e.target.files); return; }
+  if (e.target.type === 'file') dropShow(e.target, e.target.files);
+});
 $('devBody').addEventListener('dragover', e => { if (e.target.closest('.drop')) e.preventDefault(); });
 $('devBody').addEventListener('drop', e => {
   const dz = e.target.closest('.drop'); if (!dz) return;
   e.preventDefault();
+  if (dz.dataset.for === 'dv_snd_bulk') { sndBulk(e.dataTransfer.files); return; }
   const inp = $(dz.dataset.for); inp.files = e.dataTransfer.files; dropShow(inp, inp.files);
 });
 
@@ -1326,7 +1369,7 @@ $('opsView').addEventListener('click', async e => {
   t.disabled = true;
   const { error } = await db.rpc('buy_operation_item', { p_listing: t.dataset.optile });
   if (error) { t.disabled = false; return showErr(error.message); }
-  t.textContent = 'Bought!';
+  t.textContent = 'Bought!'; playSound('purchase');
   setTimeout(() => { if (view.startsWith('op:')) opRender(view.slice(3)); }, 500);
 });
 async function shopRender() {
@@ -1347,7 +1390,7 @@ $('shopView').addEventListener('click', async e => {
   const { error } = await db.rpc(b.dataset.kind === 'case' ? 'buy_case' : 'buy_key', { p_listing: b.dataset.buy });
   if (error) { b.disabled = false; return showErr(error.message); }
   const ses = await db.auth.getSession(); if (ses.data.session) loadProfile(ses.data.session.user.id);
-  b.textContent = 'Bought!';
+  b.textContent = 'Bought!'; playSound('purchase');
   setTimeout(() => { b.textContent = label; b.disabled = false; }, 500);
 });
 
@@ -1400,6 +1443,7 @@ function itemImg(it, seed, h, wear) {
   const pcfg = (it.is_pattern_based && it.pattern_config) || {}, sheetOn = pcfg.effect === 'pattern sheet' && pcfg.sheet_url, filt = (sheetOn && pcfg.sheet_mode === 'all' ? 'brightness(18) ' : '') + (p.f ? p.f + ' ' : '') + ((it.pattern_config && it.pattern_config.brightness && it.pattern_config.brightness !== 1) ? 'brightness(' + it.pattern_config.brightness + ') ' : '') + 'saturate(' + (1 - 0.55 * w).toFixed(2) + ') brightness(' + (1 - 0.3 * w).toFixed(2) + ') contrast(' + (1 - 0.15 * w).toFixed(2) + ')';
   const tf = p.t ? 'transform:' + p.t + ';' : '';
   const iu = it.image_url || (it.set_images && (it.set_images.pawn || Object.values(it.set_images)[0]));
+  if (!iu && it.kind === 'sound kit') return '<div class="boxph" style="font-size:' + (typeof h === 'number' ? h * 0.8 : 48) + 'px">♪</div>';
   if (!iu && it.kind === 'board') { const bc = it.pattern_config || {}; return '<div style="width:' + hh + ';height:' + hh + ';border-radius:4px;background:repeating-conic-gradient(' + esc(bc.board_light || '#e6ecef') + ' 0 25%,' + esc(bc.board_dark || '#6f8ea3') + ' 0 50%) 0 0/50% 50%"></div>'; }
   if (!iu) return '<div class="pc ' + (it.side === 'black' ? 'b' : 'w') + '" style="height:' + hh + ';display:grid;place-items:center;font-size:' + (typeof h === 'number' ? h * 0.7 : 40) + 'px;filter:' + filt + ';' + tf + '">' + pieceHtml(CURG[it.piece] || 'p', it.side === 'black' ? 'b' : 'w') + '</div>';
   const u = esc(iu), mask = "-webkit-mask:url('" + u + "') center/contain no-repeat;mask:url('" + u + "') center/contain no-repeat;";
@@ -1448,13 +1492,14 @@ async function invRender() {
   const caseImg = c => c.image_url ? '<img src="' + esc(c.image_url) + '" alt="">' : '<div class="boxph">▣</div>';
   const cardsCases = cases.map(r => { const c = caseOf(r.case_id), k = keys[r.case_id] || 0;
     return card(caseImg(c), c.name || '?', 'Case · ' + k + (k === 1 ? ' key' : ' keys'), RCOL.gray, '<span class="qty">×' + r.qty + '</span>',
-      '', ' data-case="' + r.case_id + '" style="cursor:context-menu" title="Right-click to look inside and open"'); }).join('');
+      '', ' data-case="' + r.case_id + '" style="cursor:pointer" title="Click to look inside and open"'); }).join('');
   const cardsKeys = keyRows.map(r => { const c = caseOf(r.case_id); return card(keyImg(c), (c.name || '?') + ' Key', 'Key', RCOL.gray, '<span class="qty">×' + r.qty + '</span>'); }).join('');
   const cardsItems = invData.inv.map(r => { const it = invData.items.find(x => x.id === r.item_id); if (!it) return '';
     return card(itemImg(it, r.pattern_seed, 84, r.wear), it.name, typeLabel(it), RCOL[it.rarity] || RCOL.gray, '', '', ' data-inv="' + r.id + '" style="cursor:pointer"'); }).join('');
-  $('invView').innerHTML = '<h2 style="margin-bottom:.8rem">Inventory</h2>' + ((cardsCases + cardsKeys + cardsItems) ? '<div class="grid">' + cardsCases + cardsKeys + cardsItems + '</div><p style="color:var(--mute);font-size:.85rem;margin-top:.8rem">Right-click a case to look inside and open it.</p>' : '<p style="color:var(--mute)">Nothing here yet.</p>');
+  $('invView').innerHTML = '<h2 style="margin-bottom:.8rem">Inventory</h2>' + ((cardsCases + cardsKeys + cardsItems) ? '<div class="grid">' + cardsCases + cardsKeys + cardsItems + '</div><p style="color:var(--mute);font-size:.85rem;margin-top:.8rem">Click a case to look inside and open it.</p>' : '<p style="color:var(--mute)">Nothing here yet.</p>');
 }
 $('invView').addEventListener('click', async e => {
+  const cc = e.target.closest('[data-case]'); if (cc) { openCaseScreen(cc.dataset.case); return; }
   const c = e.target.closest('[data-inv]'); if (!c) return;
   const r = invData.inv.find(x => x.id === c.dataset.inv), it = r && invData.items.find(x => x.id === r.item_id);
   if (it) inspect(it, Number(r.wear), r.pattern_seed);
@@ -1463,21 +1508,18 @@ $('invView').addEventListener('click', async e => {
 // ---------- Case opening animation + sounds (made with the browser's own audio, no files needed) ----------
 let actx = null;
 function snd(freq, dur, type, vol, when) {
+  if (!sndOn) return;
   try {
     actx = actx || new (window.AudioContext || window.webkitAudioContext)();
     if (actx.state === 'suspended') actx.resume();
     const t = actx.currentTime + (when || 0), o = actx.createOscillator(), g = actx.createGain();
     o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t);
-    g.gain.setValueAtTime(vol || 0.1, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    g.gain.setValueAtTime((vol || 0.1) * sndVol / 0.7, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + dur + 0.03);
   } catch (e) { /* no audio available */ }
 }
-const rollTick = () => { snd(1250 + Math.random() * 150, 0.03, 'square', 0.04); snd(300, 0.04, 'sine', 0.05); };
-function revealSound(r) {
-  const seq = { gold: [523, 659, 784, 1047, 1319, 1568], red: [523, 659, 784, 1047], pink: [494, 622, 740], purple: [440, 554], blue: [392, 494] }[r] || [392, 494];
-  seq.forEach((f, i) => snd(f, r === 'gold' ? 0.55 : 0.3, 'triangle', 0.12, i * 0.1));
-  if (r === 'gold') snd(2093, 1, 'sine', 0.05, 0.55);
-}
+const rollTick = () => playSound('case_tick');
+function revealSound(r) { playSound('case_reveal', r); }
 function playCaseRoll(c, res) {
   return new Promise(resolve => {
     const strip = $('rstrip'), view = document.querySelector('.rview');
@@ -1531,10 +1573,10 @@ async function loadLoadouts() {
   buildEq();
 }
 const SLOT_KEYS = ['king', 'queen', 'rook_1', 'rook_2', 'bishop_1', 'bishop_2', 'knight_1', 'knight_2'].concat([1, 2, 3, 4, 5, 6, 7, 8].map(n => 'pawn_' + n));
-const slotId = (side, k) => (k === 'flair' || k === 'name_effect') ? k : side + '_' + k;
+const slotId = (side, k) => (k === 'flair' || k === 'name_effect' || k === 'sound_kit') ? k : side + '_' + k;
 const slotName = k => k === 'set' ? 'Full set' : k.replace('_', ' ').replace(/^./, c => c.toUpperCase());
 function buildEq() {
-  eq = { white: {}, black: {} }; eqBoard = { white: null, black: null }; eqFlair = null; eqName = null;
+  eq = { white: {}, black: {} }; eqBoard = { white: null, black: null }; eqFlair = null; eqName = null; eqSound = null;
   const lo = loData.loadouts.find(l => l.slot === loData.active) || loData.loadouts[0]; if (!lo) return;
   const get = key => { const s = loData.slots.find(x => x.loadout_id === lo.id && x.slot_key === key); if (!s) return null;
     const r = loData.inv.find(i => i.id === s.inventory_id), it = r && loData.items.find(i => i.id === r.item_id); return it ? { r, it } : null; };
@@ -1544,7 +1586,7 @@ function buildEq() {
     if (st) { for (const k of SLOT_KEYS) { const u = (st.it.set_images || {})[k.split('_')[0]]; if (u) eq[side][k] = { item: Object.assign({}, st.it, { image_url: u }), seed: st.r.pattern_seed, wear: st.r.wear }; } continue; }
     for (const k of SLOT_KEYS) { const g = get(side + '_' + k); if (g && g.it.image_url) eq[side][k] = { item: g.it, seed: g.r.pattern_seed, wear: g.r.wear }; }
   }
-  const fl = get('flair'), nm = get('name_effect'); eqFlair = fl ? fl.it : null; eqName = nm ? nm.it : null;
+  const fl = get('flair'), nm = get('name_effect'); eqFlair = fl ? fl.it : null; eqName = nm ? nm.it : null; const sk = get('sound_kit'); eqSound = sk ? sk.it : null;
   applyName();
 }
 function loRender() {
@@ -1553,7 +1595,7 @@ function loRender() {
   const cell = (side, key) => {
     const s = loData.slots.find(x => x.loadout_id === lo.id && x.slot_key === slotId(side, key));
     const r = s && loData.inv.find(i => i.id === s.inventory_id), it = r && loData.items.find(i => i.id === r.item_id);
-    const img = it ? itemImg(it, r.pattern_seed, 52, r.wear) : (key === 'set' || key === 'board' || key === 'flair' || key === 'name_effect') ? '<div class="boxph">∅</div>' : '<div class="pc ' + (side === 'black' ? 'b' : 'w') + '" style="font-size:2.4rem;line-height:1">' + pieceHtml(CURG[key.split('_')[0]], side === 'black' ? 'b' : 'w') + '</div>';
+    const img = it ? itemImg(it, r.pattern_seed, 52, r.wear) : (key === 'set' || key === 'board' || key === 'flair' || key === 'name_effect' || key === 'sound_kit') ? '<div class="boxph">∅</div>' : '<div class="pc ' + (side === 'black' ? 'b' : 'w') + '" style="font-size:2.4rem;line-height:1">' + pieceHtml(CURG[key.split('_')[0]], side === 'black' ? 'b' : 'w') + '</div>';
     return '<div class="card2 lo" data-side="' + side + '" data-key="' + key + '" style="cursor:pointer"><div class="cin" style="padding:.35rem .3rem"><div class="cimg" style="height:58px">' + img + '</div><b>' + slotName(key) +
       '</b><small style="color:var(--mute);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (it ? esc(it.name) : 'Default') + '</small></div><div class="rbar" style="background:' + (it ? RCOL[it.rarity] || RCOL.gray : 'var(--line)') + '"></div></div>';
   };
@@ -1563,13 +1605,13 @@ function loRender() {
     [1, 2, 3].map(n => '<button data-lo="' + n + '" class="' + (n === loTab ? 'primary' : '') + '">Loadout ' + n + (n === loData.active ? ' ★' : '') + '</button>').join('') +
     '<button data-active="1"' + (loTab === loData.active ? ' disabled' : '') + '>' + (loTab === loData.active ? 'This one is in use' : 'Use this loadout') + '</button></div>' +
     '<div style="display:flex;gap:1.2rem;flex-wrap:wrap">' + half('white') + half('black') + '</div>' +
-    '<h3 style="margin:1.2rem 0 .5rem">Profile</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(105px,1fr));max-width:340px">' + cell('', 'flair') + cell('', 'name_effect') + '</div>' +
+    '<h3 style="margin:1.2rem 0 .5rem">Profile</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(105px,1fr));max-width:480px">' + cell('', 'flair') + cell('', 'name_effect') + cell('', 'sound_kit') + '</div>' +
     '<p style="color:var(--mute);margin-top:1rem">Every pawn, knight, bishop and rook has its own slot, so you can show off different skins at once. A full set clears that side\'s single pieces, and picking a single piece clears the set. Empty slots use the default pieces.</p>';
 }
 function loPick(side, key) {
   const type = key.split('_')[0];
-  const rows = loData.inv.map(r => ({ r, it: loData.items.find(i => i.id === r.item_id) })).filter(x => x.it && (key === 'flair' || key === 'name_effect' || x.it.side === 'both' || x.it.side === side) &&
-    (key === 'set' ? x.it.kind === 'set' : key === 'board' ? x.it.kind === 'board' : key === 'flair' ? x.it.kind === 'flair' : key === 'name_effect' ? x.it.kind === 'username effect' : (x.it.kind === 'piece' && x.it.piece === type)));
+  const rows = loData.inv.map(r => ({ r, it: loData.items.find(i => i.id === r.item_id) })).filter(x => x.it && (key === 'flair' || key === 'name_effect' || key === 'sound_kit' || x.it.side === 'both' || x.it.side === side) &&
+    (key === 'set' ? x.it.kind === 'set' : key === 'board' ? x.it.kind === 'board' : key === 'flair' ? x.it.kind === 'flair' : key === 'name_effect' ? x.it.kind === 'username effect' : key === 'sound_kit' ? x.it.kind === 'sound kit' : (x.it.kind === 'piece' && x.it.piece === type)));
   $('inspBox').innerHTML = '<h3 style="margin-bottom:.6rem">' + (side ? side + ' · ' : '') + slotName(key).toLowerCase() + '</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(100px,1fr));max-height:55vh;overflow:auto">' +
     '<div class="card2" data-pick="" style="cursor:pointer"><div class="cin"><div class="cimg"><div class="boxph">∅</div></div><b>None</b><small style="color:var(--mute);display:block">default</small></div><div class="rbar" style="background:var(--line)"></div></div>' +
     rows.map(x => '<div class="card2" data-pick="' + x.r.id + '" style="cursor:pointer"><div class="cin"><div class="cimg">' + itemImg(x.it, x.r.pattern_seed, 60, x.r.wear) + '</div><b>' + esc(x.it.name) +
@@ -1580,7 +1622,7 @@ function loPick(side, key) {
 }
 async function equip(side, key, invId) {
   const lo = loData.loadouts.find(l => l.slot === loTab); if (!lo) return;
-  const sk = slotId(side, key), isPiece = key !== 'set' && key !== 'board' && key !== 'flair' && key !== 'name_effect';
+  const sk = slotId(side, key), isPiece = key !== 'set' && key !== 'board' && key !== 'flair' && key !== 'name_effect' && key !== 'sound_kit';
   try {
     const L = () => db.from('loadout_slots').delete().eq('loadout_id', lo.id);
     if (invId) { const r0 = await L().eq('inventory_id', invId); if (r0.error) throw r0.error; }                    // an item can only sit in one slot
@@ -1659,6 +1701,8 @@ function renderClocks() {
     const v = val(c), el = $(id);
     el.textContent = fmtClock(v); el.classList.toggle('on', !clock.over && game.turn() === c); el.classList.toggle('low', v < 10000);
   }
+  const mine = val(myColor);
+  if (live && game.turn() === myColor) { if (mine < 10000 && !clock.warned) { clock.warned = true; playSound('low_time'); } else if (mine >= 10000) clock.warned = false; }
   if (live && val(game.turn()) <= 0) clockFlag(game.turn());
 }
 function clockFlag(c) {
@@ -1675,10 +1719,7 @@ let puz = null, pzStop = false, pzTab = 'rank', pzRankedOn = localStorage.getIte
 const wp = { sets: [] };
 const setPz = (t, bad) => { $('pzMsg').style.color = bad ? 'var(--danger)' : 'var(--gold)'; $('pzMsg').textContent = t || ''; };
 const fmtSecs = t => { t = Math.max(0, Math.round(t)); const h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), x = t % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
-function puzzleSound(ok) {   // a happy rising chime when you got it, a low dull one when you did not
-  if (ok) [523, 659, 784, 1047].forEach((f, i) => snd(f, 0.35, 'triangle', 0.13, i * 0.09));
-  else { snd(196, 0.45, 'sawtooth', 0.07); snd(147, 0.6, 'sawtooth', 0.07, 0.18); }
-}
+function puzzleSound(ok) { playSound(ok ? 'puzzle_correct' : 'puzzle_wrong'); }
 async function pzRefreshRating() {
   const ses = await db.auth.getSession(); if (!ses.data.session) return;
   const r = await db.from('profiles').select('puzzle_rating,puzzles_played').eq('id', ses.data.session.user.id).maybeSingle();
@@ -2088,8 +2129,9 @@ const WK_RAR = ['gray', 'light blue', 'blue', 'purple', 'pink', 'red'];
 const WK_DEF = [65, 15, 10, 5, 3, 2];
 let devWkItems = [];
 async function devWeekly() {
-  const [cr, cols, odds, its] = await Promise.all([db.rpc('dev_get_xp_config'), db.from('collections').select('*').order('created_at'), db.from('collection_rarity_odds').select('*'),
-    db.from('items').select('id,name,rarity,collection_id,drop_enabled,drop_weight,kind').neq('rarity', 'gold').order('name')]);
+  const [cr, cols, odds, its, ex, allIt, allCs] = await Promise.all([db.rpc('dev_get_xp_config'), db.from('collections').select('*').order('created_at'), db.from('collection_rarity_odds').select('*'),
+    db.from('items').select('id,name,rarity,collection_id,drop_enabled,drop_weight,kind').neq('rarity', 'gold').order('name'),
+    db.from('weekly_extras').select('*').order('created_at'), db.from('items').select('id,name,rarity').order('name'), db.from('cases').select('*')]);
   if (cr.error) { $('devBody').innerHTML = '<p style="color:var(--danger)">' + esc(cr.error.message) + ' (run the SQL step first)</p>'; return; }
   const c = cr.data || {}, tiers = c.tiers || [];
   const num = (id, v, st) => '<input id="' + id + '" type="number" min="0" step="' + (st || 1) + '" value="' + (v == null ? '' : v) + '">';
@@ -2115,6 +2157,11 @@ async function devWeekly() {
       return '<div style="margin-top:.8rem"><b>' + esc(col.name) + '</b>' + list.map(i => { const tot = list.filter(x => x.drop_enabled && x.rarity === i.rarity).reduce((a, x) => a + Number(x.drop_weight), 0), pc = i.drop_enabled && tot ? Math.round(1000 * i.drop_weight / tot) / 10 : 0;
         return '<div class="li"><input id="wi_' + i.id + '_on" type="checkbox" style="width:auto"' + (i.drop_enabled ? ' checked' : '') + '><div><b>' + esc(i.name) + '</b><br><small style="color:' + (RCOL[i.rarity] || '#fff') + '">' + esc(i.rarity) + '</small>' + (i.drop_enabled ? '<small style="color:var(--mute)"> · ' + pc + '% of its rarity</small>' : '') + '</div><div style="width:90px">' + num('wi_' + i.id + '_w', i.drop_weight, 1) + '</div></div>'; }).join('') + '</div>'; }).join('') +
     '<div class="btns" style="margin-top:.8rem"><button class="primary" data-act="wkitems">Save item odds</button></div></div>';
+  const opt = (l, n) => '<option value="">(none)</option>' + (l || []).map(x => '<option value="' + x.id + '">' + esc(x.name) + '</option>').join('');
+  h += '<div class="sec"><b>4. Add specific items and cases</b><p style="color:var(--mute);margin:.3rem 0 0">Put any item or case straight into the weekly drops. The chance is per slot: with 6 slots, 10% shows up in about 1 of every 2 drops. These are checked before the normal collection rolls.</p>' +
+    ((ex.data || []).map(e => '<div class="li"><div><b>' + esc(e.item_id ? nameOf(allIt.data, e.item_id) : nameOf(allCs.data, e.case_id)) + '</b><br><small>' + (e.item_id ? 'item' : 'case') + ' · ' + e.chance + '% per slot</small></div><button data-act="wkxdel" data-id="' + e.id + '">Remove</button></div>').join('') || '<div style="color:var(--mute);font-size:.85rem;margin-top:.4rem">none yet</div>') +
+    '<div style="margin-top:.8rem"><b>Add one</b><label for="wxe_item">Item</label><select id="wxe_item">' + opt(allIt.data) + '</select><label for="wxe_case">or a case</label><select id="wxe_case">' + opt(allCs.data) + '</select>' +
+    '<label for="wxe_chance">Chance per slot (%)</label><input id="wxe_chance" type="number" min="0" max="100" step="0.5" value="10"><div class="btns" style="margin-top:.6rem"><button class="primary" data-act="wkxadd">Add to weekly drops</button></div></div></div>';
   $('devBody').innerHTML = h;
 }
 async function devMedals() {
@@ -2154,19 +2201,64 @@ async function wkOpenDrop() {
   const picked = new Set();
   const draw = () => {
     $('inspBox').innerHTML = '<h2 style="margin-bottom:.4rem">Weekly drop</h2><p style="color:var(--mute);margin-bottom:.8rem">Pick 4 of these ' + data.length + ' items.</p><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(105px,1fr))">' +
-      data.map(it => '<div class="card2' + (picked.has(it.id) ? ' pickd' : '') + '" data-wpick="' + it.id + '" style="cursor:pointer"><div class="cin"><div class="cimg">' + itemImg(it, 1, 66, 0) + '</div><b>' + esc(it.name) + '</b><small style="color:' + (RCOL[it.rarity] || '#fff') + ';display:block">' + esc(it.rarity) +
+      data.map(it => '<div class="card2' + (picked.has(it.id) ? ' pickd' : '') + '" data-wpick="' + it.id + '" style="cursor:pointer"><div class="cin"><div class="cimg">' + (it.is_case ? (it.image_url ? '<img src="' + esc(it.image_url) + '" alt="" draggable="false">' : '<div class="boxph">▣</div>') : itemImg(it, 1, 66, 0)) + '</div><b>' + esc(it.name) + (it.is_case ? ' (case)' : '') + '</b><small style="color:' + (RCOL[it.rarity] || '#fff') + ';display:block">' + esc(it.rarity) +
         '</small></div><div class="rbar" style="background:' + (RCOL[it.rarity] || RCOL.gray) + '"></div></div>').join('') + '</div><div class="btns" style="margin-top:1rem"><button class="primary" id="wkClaim"' + (picked.size === 4 ? '' : ' disabled') + '>Claim (' + picked.size + ' / 4)</button><button id="inspClose">Later</button></div>';
     $('inspClose').onclick = () => $('insp').classList.add('hidden');
     $('wkClaim').onclick = async () => {
       $('wkClaim').disabled = true;
       const r = await db.rpc('claim_weekly_drop', { p_picks: [...picked] });
       if (r.error) { $('wkClaim').disabled = false; return showErr(r.error.message); }
-      $('insp').classList.add('hidden'); wkRender(); loadLoadouts();
+      playSound('claim'); $('insp').classList.add('hidden'); wkRender(); loadLoadouts();
     };
   };
   $('inspBox').onclick = e => { const c = e.target.closest('[data-wpick]'); if (!c) return; const id = c.dataset.wpick; if (picked.has(id)) picked.delete(id); else if (picked.size < 4) picked.add(id); draw(); };
   draw(); $('insp').classList.remove('hidden');
 }
+
+// ---------- Sounds: your equipped sound kit, with the built-in sounds as the fallback ----------
+const DEF_SND = {
+  move: () => { snd(180, 0.07, 'triangle', 0.25); snd(90, 0.09, 'sine', 0.3); },
+  capture: () => { snd(130, 0.12, 'sawtooth', 0.12); snd(70, 0.15, 'sine', 0.35); snd(900, 0.03, 'square', 0.05); },
+  castle: () => { DEF_SND.move(); setTimeout(DEF_SND.move, 110); },
+  check: () => { snd(880, 0.12, 'square', 0.07); snd(1175, 0.18, 'square', 0.06, 0.1); },
+  promote: () => [523, 659, 784, 1047].forEach((f, i) => snd(f, 0.2, 'triangle', 0.1, i * 0.07)),
+  checkmate: () => { snd(110, 0.7, 'sawtooth', 0.1); snd(165, 0.7, 'sawtooth', 0.08, 0.05); snd(55, 0.9, 'sine', 0.3); },
+  game_start: () => { snd(440, 0.12, 'triangle', 0.1); snd(660, 0.2, 'triangle', 0.1, 0.12); },
+  win: () => [523, 659, 784, 1047, 1319].forEach((f, i) => snd(f, 0.35, 'triangle', 0.12, i * 0.1)),
+  loss: () => [392, 330, 262].forEach((f, i) => snd(f, 0.45, 'sawtooth', 0.06, i * 0.16)),
+  draw: () => { snd(440, 0.4, 'triangle', 0.1); snd(554, 0.4, 'triangle', 0.08, 0.12); },
+  low_time: () => { snd(880, 0.12, 'square', 0.08); snd(880, 0.12, 'square', 0.08, 0.2); },
+  puzzle_correct: () => [523, 659, 784, 1047].forEach((f, i) => snd(f, 0.35, 'triangle', 0.13, i * 0.09)),
+  puzzle_wrong: () => { snd(196, 0.45, 'sawtooth', 0.07); snd(147, 0.6, 'sawtooth', 0.07, 0.18); },
+  case_tick: () => { snd(1250 + Math.random() * 150, 0.03, 'square', 0.04); snd(300, 0.04, 'sine', 0.05); },
+  case_reveal: r => {
+    const seq = { gold: [523, 659, 784, 1047, 1319, 1568], red: [523, 659, 784, 1047], pink: [494, 622, 740], purple: [440, 554], blue: [392, 494] }[r] || [392, 494];
+    seq.forEach((f, i) => snd(f, r === 'gold' ? 0.55 : 0.3, 'triangle', 0.12, i * 0.1));
+    if (r === 'gold') snd(2093, 1, 'sine', 0.05, 0.55);
+  },
+  level_up: () => [392, 523, 659, 784, 1047].forEach((f, i) => snd(f, 0.3, 'triangle', 0.12, i * 0.09)),
+  purchase: () => { snd(988, 0.08, 'triangle', 0.1); snd(1319, 0.15, 'triangle', 0.1, 0.08); },
+  claim: () => [659, 784, 988, 1319].forEach((f, i) => snd(f, 0.3, 'triangle', 0.11, i * 0.08))
+};
+function playSound(evt, arg) {
+  if (!sndOn) return;
+  const url = eqSound && eqSound.pattern_config && eqSound.pattern_config.sounds && eqSound.pattern_config.sounds[evt];
+  if (url) { try { const a = new Audio(url); a.volume = Math.min(1, sndVol); a.play().catch(() => { /* blocked until you click once */ }); } catch (e) { /* ignore */ } return; }
+  if (DEF_SND[evt]) DEF_SND[evt](arg);
+}
+let sndKey = '', sndLen = 0;
+function moveSound() {   // plays when a new move appears on the board, whoever made it
+  const h = game.history({ verbose: true }), m = h[h.length - 1], key = h.length + '|' + game.fen();
+  if (key === sndKey) return;
+  const grew = h.length > sndLen || (h.length === sndLen && h.length > 0);
+  sndKey = key; sndLen = h.length;
+  if (!m || !grew) return;
+  playSound(game.in_checkmate() ? 'checkmate' : game.in_check() ? 'check' : m.promotion ? 'promote' : (m.flags.includes('k') || m.flags.includes('q')) ? 'castle' : m.captured ? 'capture' : 'move');
+}
+try { sndOn = localStorage.getItem('sndOn') !== '0'; sndVol = (Number(localStorage.getItem('sndVol')) || 70) / 100; } catch (e) { /* ignore */ }
+$('sndOn').checked = sndOn; $('sndVol').value = Math.round(sndVol * 100);
+$('sndOn').onchange = () => { sndOn = $('sndOn').checked; try { localStorage.setItem('sndOn', sndOn ? '1' : '0'); } catch (e) { /* ignore */ } };
+$('sndVol').oninput = () => { sndVol = Number($('sndVol').value) / 100; try { localStorage.setItem('sndVol', $('sndVol').value); } catch (e) { /* ignore */ } };
 </script>
 </body>
 </html>
