@@ -45,7 +45,7 @@ main{display:flex;flex-wrap:wrap;gap:1.4rem;justify-content:center;padding:1.4re
 .sq.hint:not(.cap){background-image:radial-gradient(circle,rgba(17,32,43,.38) 0 14%,transparent 15%)}
 .sq.hint.cap{outline:4px solid rgba(17,32,43,.45);outline-offset:-4px}
 nav{display:flex;gap:.5rem;padding:.6rem 1.2rem;border-bottom:1px solid var(--line)}
-#opsView,#shopView,#invView,#loView,#rtView{max-width:820px;margin:0 auto;padding:1.2rem}
+#opsView,#shopView,#invView,#loView,#rtView,#wkView{max-width:820px;margin:0 auto;padding:1.2rem}
 .op{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:1rem;margin-bottom:1rem}
 .op.over{opacity:.6}
 .op h3{margin:0;font-family:Georgia,serif}
@@ -179,6 +179,9 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
 .lvbox{position:relative;flex:0 0 40px;height:40px;display:grid;place-items:center;background:#e9eef1;color:#10202b;border-radius:4px;font-weight:700;cursor:pointer}
 .lvbox.got{background:var(--gold)} .lvbox.has i{position:absolute;right:3px;top:3px;width:8px;height:8px;border-radius:50%;background:#2e9e5b}
 @media (max-width:760px){.opscr{grid-template-columns:1fr}.opscr .optop{grid-column:1;grid-template-columns:1fr;gap:.3rem;text-align:center}.optop .otl{text-align:center}.opscr .opbot{grid-column:1}.opscr .opmain{grid-template-columns:1fr}}
+.card2.pickd{outline:3px solid var(--gold);outline-offset:-3px}
+.lvbig{font-size:3.2rem;font-weight:800;color:var(--gold);line-height:1}
+.xpbar{height:12px;background:#1f2b34;border-radius:6px;overflow:hidden;margin:.5rem 0} .xpbar div{height:100%;background:var(--gold)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -283,6 +286,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
   <section id="invView" class="hidden"></section>
   <section id="loView" class="hidden"></section>
   <section id="rtView" class="hidden"></section>
+  <section id="wkView" class="hidden"></section>
 </section>
 
 <div id="ov" class="hidden" role="dialog" aria-modal="true">
@@ -291,6 +295,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
     <p class="sub" id="ovSub"></p>
     <div class="stat"><span>Money</span><b id="ovMoney"></b></div>
     <div class="stat"><span>Elo</span><b id="ovElo"></b></div>
+    <div class="stat hidden" id="ovXpRow"><span>XP</span><b id="ovXp"></b></div>
     <p class="note" id="ovNote"></p>
     <div class="btns"><button class="primary" id="ovAgain">Play again</button><button id="ovClose">Close</button></div>
   </div>
@@ -299,7 +304,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
 <div id="roll" class="hidden"><div class="rbox"><h2 style="margin-bottom:.8rem">Opening case...</h2><div class="rview"><div id="rstrip"></div><div class="rmark"></div></div><button id="rskip">Skip</button></div></div>
 <div id="insp" class="hidden"><div class="box" id="inspBox"></div></div>
 <div id="dev" class="hidden"><div class="panel">
-  <div class="dh"><b>Dev tools</b><span class="btns"><button id="dvTabItems">Items</button><button id="dvTabColls">Collections</button><button id="dvTabCases">Cases</button><button id="dvTabOps">Operations</button><button id="dvTabShop">Shop keys</button><button id="dvTabShopC">Shop cases</button><button id="dvTabMoney">Money</button><button id="dvTabNews">News</button><button id="dvTabPuz">Puzzles</button><button id="dvClose">Close</button></span></div>
+  <div class="dh"><b>Dev tools</b><span class="btns"><button id="dvTabItems">Items</button><button id="dvTabColls">Collections</button><button id="dvTabCases">Cases</button><button id="dvTabOps">Operations</button><button id="dvTabShop">Shop keys</button><button id="dvTabShopC">Shop cases</button><button id="dvTabMoney">Money</button><button id="dvTabNews">News</button><button id="dvTabPuz">Puzzles</button><button id="dvTabWk">Weekly drops</button><button id="dvTabMed">Year flairs</button><button id="dvClose">Close</button></span></div>
   <div id="devBody"></div><div id="devMsg"></div>
 </div></div>
 <script src="https://cdn.jsdelivr.net/npm/fzstd@0.1.1/umd/index.js"></script>
@@ -388,6 +393,7 @@ async function route(session) {
   loadLoadouts().then(() => render());
   checkNews();
   loadRatings();
+  db.rpc('sync_medals');
 }
 db.auth.onAuthStateChange((_e, session) => {
   if (_e === 'SIGNED_IN') signedOutByUser = false;
@@ -630,6 +636,12 @@ function showResult(i) {
     } else $('ovElo').textContent = Math.round(i.after);
     $('ovNote').textContent = (i.result === 'loss' && Number(i.reward) === 0) ? 'Losses only pay money after 25 moves.' : '';
   }
+  const xr = i.xp; $('ovXpRow').classList.toggle('hidden', !(xr && xr.xp));
+  if (xr && xr.xp) {
+    $('ovXp').textContent = '+' + xr.xp + ' XP' + (xr.level_ups ? ' · LEVEL UP! Level ' + xr.level : '');
+    if (xr.medal) $('ovNote').textContent = 'You earned the ' + xr.medal.year + ' medal, tier ' + xr.medal.tier + '! Your level reset to 1.';
+    else if (xr.level_ups) $('ovNote').textContent = 'Level up! Check the Weekly tab for your weekly drop.';
+  }
   $('ov').classList.remove('hidden');
 }
 $('ovClose').onclick = () => $('ov').classList.add('hidden');
@@ -841,7 +853,7 @@ async function finish(result, reason, quiet) {
   loadRatings();
   const ses = await db.auth.getSession();
   if (ses.data.session) loadProfile(ses.data.session.user.id);
-  if (!quiet) showResult({ result, reason, plies, reward: data ? data.reward : null, before: bef, after, modeName, error: !!error });
+  if (!quiet) showResult({ result, reason, plies, reward: data ? data.reward : null, before: bef, after, modeName, xp: data ? data.xp : null, error: !!error });
 }
 
 $('btnBot').onclick = async () => {
@@ -909,6 +921,8 @@ $('dvTabItems').onclick = () => { devTab = 'items'; devEdit = null; devRender();
 $('dvTabColls').onclick = () => { devTab = 'collections'; devEdit = null; devRender(); };
 $('dvTabCases').onclick = () => { devTab = 'cases'; devEdit = null; devRender(); };
 $('dvTabShopC').onclick = () => { devTab = 'shop_cases'; devEdit = null; devRender(); };
+$('dvTabWk').onclick = () => { devTab = 'weekly'; devEdit = null; devRender(); };
+$('dvTabMed').onclick = () => { devTab = 'medals'; devEdit = null; devRender(); };
 $('dvTabPuz').onclick = () => { devTab = 'puzzles'; devEdit = null; devRender(); };
 $('dvTabNews').onclick = () => { devTab = 'news'; devEdit = null; devRender(); };
 $('dvTabMoney').onclick = () => { devTab = 'money'; devEdit = null; devRender(); };
@@ -1037,9 +1051,11 @@ async function devMoney() {
 }
 async function devRender() {
   if (!devOpen) return;
-  for (const [id, t] of [['dvTabItems', 'items'], ['dvTabColls', 'collections'], ['dvTabOps', 'operations'], ['dvTabShop', 'shop_keys'], ['dvTabCases', 'cases'], ['dvTabShopC', 'shop_cases'], ['dvTabMoney', 'money'], ['dvTabNews', 'news'], ['dvTabPuz', 'puzzles']]) $(id).className = devTab === t ? 'primary' : '';
+  for (const [id, t] of [['dvTabItems', 'items'], ['dvTabColls', 'collections'], ['dvTabOps', 'operations'], ['dvTabShop', 'shop_keys'], ['dvTabCases', 'cases'], ['dvTabShopC', 'shop_cases'], ['dvTabMoney', 'money'], ['dvTabNews', 'news'], ['dvTabPuz', 'puzzles'], ['dvTabWk', 'weekly'], ['dvTabMed', 'medals']]) $(id).className = devTab === t ? 'primary' : '';
   if (devTab === 'money') return devMoney();
   if (devTab === 'puzzles') return devPuzzles();
+  if (devTab === 'weekly') return devWeekly();
+  if (devTab === 'medals') return devMedals();
   const [ci, ii, rr, ca] = await Promise.all([db.from('collections').select('*').order('created_at'), db.from('items').select('*').order('created_at'),
                                           db.from(devTab).select('*').order('created_at', { ascending: false }), db.from('cases').select('*').order('created_at')]);
   const bad = ci.error || ii.error || rr.error || ca.error;
@@ -1083,6 +1099,51 @@ $('devBody').addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const a = b.dataset.act, id = b.dataset.id;
   try {
+    if (a === 'wkxp') {
+      const n = id => Number($(id).value) || 0, tiers = [];
+      for (let i = 0; i < 5; i++) { const m = Number($('wx_m' + i).value), u = $('wx_u' + i).value; if (m > 0) tiers.push({ upto: u === '' ? null : Number(u), mult: m }); }
+      if (!tiers.length) throw new Error('Add at least one XP tier.');
+      tiers[tiers.length - 1].upto = null;
+      const cfg = { win: n('wx_win'), draw: n('wx_draw'), loss: n('wx_loss'), f_bullet: n('wx_fb'), f_blitz: n('wx_fz'), f_rapid: n('wx_fr'), per_level: Math.max(100, n('wx_per')), min_plies: Math.max(0, n('wx_min')), max_level: 40, tiers };
+      const { error } = await db.rpc('dev_set_xp_config', { p_cfg: cfg });
+      if (error) throw error;
+      devMsg('XP settings saved.'); return devWeekly();
+    }
+    if (a === 'wkodds') {
+      const rows = WK_RAR.map((r, i) => ({ collection_id: id, rarity: r, chance: Math.max(0, Number($('ro_' + id + '_' + i).value) || 0) }));
+      const r1 = await db.from('collection_rarity_odds').upsert(rows, { onConflict: 'collection_id,rarity' }); if (r1.error) throw r1.error;
+      const r2 = await db.from('collections').update({ is_active_drop: $('ro_' + id + '_act').checked }).eq('id', id); if (r2.error) throw r2.error;
+      devMsg('Saved.'); return;
+    }
+    if (a === 'wkitems') {
+      for (const it of devWkItems) {
+        const on = $('wi_' + it.id + '_on').checked, w = Math.max(0, Number($('wi_' + it.id + '_w').value) || 0);
+        if (on !== !!it.drop_enabled || w !== Number(it.drop_weight)) { const r = await db.from('items').update({ drop_enabled: on, drop_weight: w }).eq('id', it.id); if (r.error) throw r.error; }
+      }
+      devMsg('Item odds saved.'); return devWeekly();
+    }
+    if (a === 'medsave') {
+      const year = Number($('md_year').value), tier = Number($('md_tier').value), f = $('md_img').files[0];
+      if (!(year > 2000) || !(tier >= 1)) throw new Error('Enter a year and a tier of 1 or more.');
+      const name = $('md_name').value.trim() || (year + ' Service Medal, tier ' + tier);
+      const ex = await db.from('medal_defs').select('item_id').eq('year', year).eq('tier', tier).maybeSingle();
+      const url = f ? await devUpload(f, false) : null;
+      if (ex.data && ex.data.item_id) { const upd = { name }; if (url) upd.image_url = url; const r = await db.from('items').update(upd).eq('id', ex.data.item_id); if (r.error) throw r.error; }
+      else {
+        if (!url) throw new Error('Add the flair image.');
+        const ins = await db.from('items').insert({ name, description: year + ' service medal, tier ' + tier, kind: 'flair', piece: 'pawn', side: 'both', rarity: 'gold', wear_cap: 0, wear_min: 0, wear_max: 0,
+          is_pattern_based: false, pattern_config: { allow_charms: true }, is_default: false, image_url: url }).select().single();
+        if (ins.error) throw ins.error;
+        const d = await db.from('medal_defs').upsert({ year, tier, item_id: ins.data.id }); if (d.error) throw d.error;
+      }
+      devMsg('Flair saved.'); return devMedals();
+    }
+    if (a === 'meddel') {
+      if (!confirm('Delete this flair? Players who earned it lose it.')) return;
+      if (b.dataset.item) { const r = await db.rpc('dev_delete_item', { p_item: b.dataset.item }); if (r.error) throw r.error; }
+      const r2 = await db.from('medal_defs').delete().eq('year', Number(b.dataset.year)).eq('tier', Number(b.dataset.tier)); if (r2.error) throw r2.error;
+      devMsg('Deleted.'); return devMedals();
+    }
     if (a === 'pzstop') { pzStop = true; return; }
     if (a === 'pzimp') { await puzzleImport(); return; }
     if (a === 'madd' || a === 'msub') {
@@ -1146,7 +1207,7 @@ async function loadOps() {
   if (view.startsWith('op:') && !ops.find(o => 'op:' + o.id === view)) showView('play'); else navRender();
 }
 function navRender() {
-  $('nav').innerHTML = '<button data-v="play">Play</button><button data-v="pz">Puzzles</button><button data-v="rt">Ratings</button><button data-v="an">Analysis</button><button data-v="inv">Inventory</button><button data-v="lo">Loadout</button>' + ops.map(o => '<button data-v="op:' + o.id + '">' + esc(o.name) + '</button>').join('') + '<button data-v="shop">Shop</button>';
+  $('nav').innerHTML = '<button data-v="play">Play</button><button data-v="pz">Puzzles</button><button data-v="rt">Ratings</button><button data-v="wk">Weekly</button><button data-v="an">Analysis</button><button data-v="inv">Inventory</button><button data-v="lo">Loadout</button>' + ops.map(o => '<button data-v="op:' + o.id + '">' + esc(o.name) + '</button>').join('') + '<button data-v="shop">Shop</button>';
   $('nav').querySelectorAll('button').forEach(b => { b.className = b.dataset.v === view ? 'primary' : ''; });
 }
 $('nav').addEventListener('click', e => { const b = e.target.closest('button'); if (b) showView(b.dataset.v); });
@@ -1160,8 +1221,8 @@ function showView(v) {
   view = v; navRender();
   if (v === 'pz') puzzleEnter();
   if (v === 'an') anEnter();
-  $('playView').classList.toggle('hidden', v !== 'play' && v !== 'pz' && v !== 'an'); $('opsView').classList.toggle('hidden', !v.startsWith('op:')); $('shopView').classList.toggle('hidden', v !== 'shop'); $('invView').classList.toggle('hidden', v !== 'inv'); $('loView').classList.toggle('hidden', v !== 'lo'); $('rtView').classList.toggle('hidden', v !== 'rt');
-  if (v.startsWith('op:')) opRender(v.slice(3)); else if (v === 'shop') shopRender(); else if (v === 'inv') invRender(); else if (v === 'lo') loadLoadouts().then(loRender); else if (v === 'rt') rtRender();
+  $('playView').classList.toggle('hidden', v !== 'play' && v !== 'pz' && v !== 'an'); $('opsView').classList.toggle('hidden', !v.startsWith('op:')); $('shopView').classList.toggle('hidden', v !== 'shop'); $('invView').classList.toggle('hidden', v !== 'inv'); $('loView').classList.toggle('hidden', v !== 'lo'); $('rtView').classList.toggle('hidden', v !== 'rt'); $('wkView').classList.toggle('hidden', v !== 'wk');
+  if (v.startsWith('op:')) opRender(v.slice(3)); else if (v === 'shop') shopRender(); else if (v === 'inv') invRender(); else if (v === 'lo') loadLoadouts().then(loRender); else if (v === 'rt') rtRender(); else if (v === 'wk') wkRender();
 }
 function fmtLeft(ms) {
   if (ms <= 0) return 'Ended';
@@ -1171,13 +1232,13 @@ function fmtLeft(ms) {
 function tick() {
   document.querySelectorAll('.cd').forEach(el => {
     const ms = new Date(el.dataset.end) - Date.now(); el.textContent = fmtLeft(ms);
-    if (ms <= 0 && el.dataset.reload && !el.dataset.fired) { el.dataset.fired = '1'; if (view.startsWith('op:')) setTimeout(() => opRender(view.slice(3)), 1500); }   // a quest group just reset
+    if (ms <= 0 && el.dataset.reload && !el.dataset.fired) { el.dataset.fired = '1'; if (view.startsWith('op:')) setTimeout(() => opRender(view.slice(3)), 1500); else if (view === 'wk') setTimeout(wkRender, 1500); }   // a reset just happened
   });
 }
 setInterval(() => {
   const gone = ops.filter(o => new Date(o.ends_at) <= Date.now());
   if (gone.length) { ops = ops.filter(o => !gone.includes(o)); if (view.startsWith('op:') && !ops.find(o => 'op:' + o.id === view)) showView('play'); else navRender(); }
-  if (view.startsWith('op:')) tick();
+  if (view.startsWith('op:') || view === 'wk') tick();
 }, 1000);
 setInterval(() => { if (!$('app').classList.contains('hidden')) loadOps(); }, 60000);
 
@@ -2021,6 +2082,91 @@ $('anLoad').onclick = () => {
   an.stack = [game.fen()]; an.sans = []; an.lasts = [null]; an.idx = 0; sel = null; legal = []; last = []; render(); anAnalyze();
 };
 $('anCopy').onclick = () => { try { navigator.clipboard.writeText(game.fen()); } catch (e) { $('anFen').select(); } };
+
+// ---------- Dev: weekly drops (XP settings, rarity odds per collection, item odds) and yearly flairs ----------
+const WK_RAR = ['gray', 'light blue', 'blue', 'purple', 'pink', 'red'];
+const WK_DEF = [65, 15, 10, 5, 3, 2];
+let devWkItems = [];
+async function devWeekly() {
+  const [cr, cols, odds, its] = await Promise.all([db.rpc('dev_get_xp_config'), db.from('collections').select('*').order('created_at'), db.from('collection_rarity_odds').select('*'),
+    db.from('items').select('id,name,rarity,collection_id,drop_enabled,drop_weight,kind').neq('rarity', 'gold').order('name')]);
+  if (cr.error) { $('devBody').innerHTML = '<p style="color:var(--danger)">' + esc(cr.error.message) + ' (run the SQL step first)</p>'; return; }
+  const c = cr.data || {}, tiers = c.tiers || [];
+  const num = (id, v, st) => '<input id="' + id + '" type="number" min="0" step="' + (st || 1) + '" value="' + (v == null ? '' : v) + '">';
+  let need = 0, base = 0, prev = 0;                       // how much base XP it takes to earn one level
+  for (const t of tiers) { const top = t.upto == null ? 1e12 : t.upto, room = (top - prev) * t.mult; if (need + room >= c.per_level) { base = prev + (c.per_level - need) / t.mult; need = c.per_level; break; } need += room; prev = top; }
+  const avg = ((c.win + c.draw + c.loss) / 3) * (c.f_rapid || 1), games = base && avg ? Math.ceil(base / avg) : 0;
+  let h = '<div class="sec"><b>1. XP (works like CS2)</b><p style="color:var(--mute);margin:.3rem 0 0">XP depends on the result and the game speed. Each week starts with a big bonus (4x) that shrinks as you earn, and it resets Wednesday 5pm Central. A level is ' + c.per_level + ' XP, so right now it takes about <b>' + games + '</b> average rapid games to level up in a week.</p>' +
+    '<label>XP for a win (base)</label>' + num('wx_win', c.win) + '<label>XP for a draw</label>' + num('wx_draw', c.draw) + '<label>XP for a loss</label>' + num('wx_loss', c.loss) +
+    '<label>Bullet counts as (1 = full XP)</label>' + num('wx_fb', c.f_bullet, 0.05) + '<label>Blitz counts as</label>' + num('wx_fz', c.f_blitz, 0.05) + '<label>Rapid (and no clock) counts as</label>' + num('wx_fr', c.f_rapid, 0.05) +
+    '<label>XP per level</label>' + num('wx_per', c.per_level) + '<label>Fewest moves for a game to give XP (half-moves)</label>' + num('wx_min', c.min_plies) +
+    '<label>Weekly bonus steps: earn up to this much base XP at this multiplier (leave the last "up to" empty)</label>' +
+    [0, 1, 2, 3, 4].map(i => '<div style="display:flex;gap:.5rem;margin-top:.3rem"><div style="flex:1">' + num('wx_u' + i, tiers[i] ? tiers[i].upto : '', 100) + '</div><div style="flex:1">' + num('wx_m' + i, tiers[i] ? tiers[i].mult : '', 0.05) + '</div></div>').join('') +
+    '<div style="color:var(--mute);font-size:.8rem;margin-top:.2rem">Left box: up to this much base XP. Right box: multiplier (4 = 4x, 0.25 = a quarter). Empty multiplier = unused step.</div>' +
+    '<div class="btns" style="margin-top:.8rem"><button class="primary" data-act="wkxp">Save XP settings</button></div></div>';
+  h += '<div class="sec"><b>2. Rarity odds in each collection</b><p style="color:var(--mute);margin:.3rem 0 0">Tick a collection to put it in the weekly drops, then set how likely each rarity is inside it (they are rescaled to 100%, and a rarity with no enabled items is skipped). Untouched collections use 65 / 15 / 10 / 5 / 3 / 2.</p>' +
+    (cols.data || []).map(col => { const m = {}; (odds.data || []).filter(o => o.collection_id === col.id).forEach(o => { m[o.rarity] = o.chance; });
+      return '<div class="li" style="display:block"><label style="display:flex;gap:.5rem;align-items:center;margin:0"><input id="ro_' + col.id + '_act" type="checkbox" style="width:auto"' + (col.is_active_drop ? ' checked' : '') + '><b>' + esc(col.name) + '</b> <span style="color:var(--mute)">in weekly drops</span></label>' +
+        '<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:.4rem;margin-top:.5rem">' + WK_RAR.map((r, i) => '<div><small style="color:' + RCOL[r] + '">' + r + '</small>' + num('ro_' + col.id + '_' + i, m[r] != null ? m[r] : WK_DEF[i], 1) + '</div>').join('') + '</div>' +
+        '<div class="btns" style="margin-top:.5rem"><button data-act="wkodds" data-id="' + col.id + '">Save this collection</button></div></div>'; }).join('') + '</div>';
+  devWkItems = (its.data || []).filter(i => i.collection_id);
+  h += '<div class="sec"><b>3. Which items can drop, and how likely</b><p style="color:var(--mute);margin:.3rem 0 0">Tick the items that may appear in weekly drops. The weight sets how likely each one is against the other ticked items of the same rarity in its collection (the percent shown updates when you save).</p>' +
+    (cols.data || []).map(col => { const list = devWkItems.filter(i => i.collection_id === col.id); if (!list.length) return '';
+      return '<div style="margin-top:.8rem"><b>' + esc(col.name) + '</b>' + list.map(i => { const tot = list.filter(x => x.drop_enabled && x.rarity === i.rarity).reduce((a, x) => a + Number(x.drop_weight), 0), pc = i.drop_enabled && tot ? Math.round(1000 * i.drop_weight / tot) / 10 : 0;
+        return '<div class="li"><input id="wi_' + i.id + '_on" type="checkbox" style="width:auto"' + (i.drop_enabled ? ' checked' : '') + '><div><b>' + esc(i.name) + '</b><br><small style="color:' + (RCOL[i.rarity] || '#fff') + '">' + esc(i.rarity) + '</small>' + (i.drop_enabled ? '<small style="color:var(--mute)"> · ' + pc + '% of its rarity</small>' : '') + '</div><div style="width:90px">' + num('wi_' + i.id + '_w', i.drop_weight, 1) + '</div></div>'; }).join('') + '</div>'; }).join('') +
+    '<div class="btns" style="margin-top:.8rem"><button class="primary" data-act="wkitems">Save item odds</button></div></div>';
+  $('devBody').innerHTML = h;
+}
+async function devMedals() {
+  const [defs, its] = await Promise.all([db.from('medal_defs').select('*').order('year').order('tier'), db.from('items').select('id,name,image_url').eq('kind', 'flair')]);
+  if (defs.error) { $('devBody').innerHTML = '<p style="color:var(--danger)">' + esc(defs.error.message) + ' (run the SQL step first)</p>'; return; }
+  $('devBody').innerHTML = '<b>Yearly level-40 flairs</b><p style="color:var(--mute)">Reaching level 40 gives the flair for the current year and resets the level. Each time a player makes it back in the same year they get the next tier. When the year ends, that year\'s flair can no longer be earned. Add one image per tier.</p>' +
+    ((defs.data || []).map(d => { const it = (its.data || []).find(x => x.id === d.item_id) || {};
+      return '<div class="li">' + (it.image_url ? '<img src="' + esc(it.image_url) + '" alt="">' : '') + '<div><b>' + d.year + ' · tier ' + d.tier + '</b><br><small>' + esc(it.name || '') + '</small></div><button data-act="meddel" data-year="' + d.year + '" data-tier="' + d.tier + '" data-item="' + (d.item_id || '') + '">Delete</button></div>'; }).join('') || '<div style="color:var(--mute)">No flairs yet.</div>') +
+    '<div class="sec"><b>Add or replace a flair</b><label for="md_year">Year</label><input id="md_year" type="number" value="' + new Date().getFullYear() + '"><label for="md_tier">Tier (1 = first time at level 40)</label><input id="md_tier" type="number" min="1" value="1">' +
+    '<label for="md_name">Name (optional)</label><input id="md_name" placeholder="2026 Service Medal"><label for="md_img">Image</label><div class="drop" data-for="md_img">Drop the flair image here, or click</div><input id="md_img" type="file" accept="image/*" hidden>' +
+    '<div class="btns" style="margin-top:.8rem"><button class="primary" data-act="medsave">Save flair</button></div></div>';
+}
+
+// ---------- Weekly tab: level, XP bonus, weekly drop ----------
+async function wkRender() {
+  const { data: d, error } = await db.rpc('weekly_state');
+  if (view !== 'wk') return;
+  if (error) { $('wkView').innerHTML = '<h2>Weekly</h2><p style="color:var(--mute)">' + esc(error.message) + ' (run the SQL step)</p>'; return; }
+  const pct = Math.round(100 * d.xp / d.per_level), tl = (d.tiers || []).map(t => (t.upto == null ? 'everything after that' : 'the first ' + Number(t.upto).toLocaleString() + ' base XP') + ' counts ×' + t.mult).join(', then ');
+  const medals = d.medals || [];
+  const drop = d.claimed ? '<p>You already claimed this week\'s drop. A new one unlocks after the reset.</p>' :
+    d.drop_ready ? '<p style="color:var(--gold)">You leveled up this week. Your weekly drop is ready!</p><button class="primary" id="wkOpen">Open weekly drop (pick 4 of 6)</button>' :
+    '<p>Level up once before the reset to unlock your weekly drop. You need <b>' + Math.max(0, d.per_level - d.xp) + '</b> more XP.</p>';
+  $('wkView').innerHTML = '<h2 style="margin-bottom:.8rem">Weekly</h2>' +
+    '<div class="op"><div class="row2"><div><div style="color:var(--mute)">Level</div><div class="lvbig">' + d.level + '</div></div><div style="text-align:right"><div style="color:var(--mute)">Weekly reset in</div><div class="cd" data-reload="1" data-end="' + esc(d.week_end) + '" style="font-size:1.4rem;color:var(--gold)"></div><small style="color:var(--mute)">Wednesday 5pm Central</small></div></div>' +
+    '<div class="xpbar"><div style="width:' + pct + '%"></div></div><small style="color:var(--mute)">' + d.xp + ' / ' + d.per_level + ' XP · Level ' + d.max_level + ' gives a yearly flair and resets you to level 1</small></div>' +
+    '<div class="op"><b>Bonus XP this week: ×' + d.mult + '</b><p style="color:var(--mute);margin:.3rem 0 0">' + (d.tier_left > 0 ? 'About ' + Number(d.tier_left).toLocaleString() + ' more XP at this rate.' : '') + ' Wins give the most XP, then draws, then losses. Longer games give more than bullet. This week you earned ' + Number(d.xp_earned).toLocaleString() + ' XP.</p>' +
+    '<small style="color:var(--mute)">How the bonus works: ' + esc(tl) + '.</small></div>' +
+    '<div class="op"><b>Weekly drop</b>' + drop + '</div>' +
+    '<div class="op"><b>Yearly flairs</b><p style="color:var(--mute);margin:.3rem 0 0">' + (medals.length ? medals.map(m => m.year + ' tier ' + m.tier).join(' · ') : 'None yet. Reach level 40 to earn this year\'s flair.') + '</p></div>';
+  tick();
+  if ($('wkOpen')) $('wkOpen').onclick = wkOpenDrop;
+}
+async function wkOpenDrop() {
+  const { data, error } = await db.rpc('get_weekly_drop');
+  if (error) return showErr(error.message);
+  const picked = new Set();
+  const draw = () => {
+    $('inspBox').innerHTML = '<h2 style="margin-bottom:.4rem">Weekly drop</h2><p style="color:var(--mute);margin-bottom:.8rem">Pick 4 of these ' + data.length + ' items.</p><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(105px,1fr))">' +
+      data.map(it => '<div class="card2' + (picked.has(it.id) ? ' pickd' : '') + '" data-wpick="' + it.id + '" style="cursor:pointer"><div class="cin"><div class="cimg">' + itemImg(it, 1, 66, 0) + '</div><b>' + esc(it.name) + '</b><small style="color:' + (RCOL[it.rarity] || '#fff') + ';display:block">' + esc(it.rarity) +
+        '</small></div><div class="rbar" style="background:' + (RCOL[it.rarity] || RCOL.gray) + '"></div></div>').join('') + '</div><div class="btns" style="margin-top:1rem"><button class="primary" id="wkClaim"' + (picked.size === 4 ? '' : ' disabled') + '>Claim (' + picked.size + ' / 4)</button><button id="inspClose">Later</button></div>';
+    $('inspClose').onclick = () => $('insp').classList.add('hidden');
+    $('wkClaim').onclick = async () => {
+      $('wkClaim').disabled = true;
+      const r = await db.rpc('claim_weekly_drop', { p_picks: [...picked] });
+      if (r.error) { $('wkClaim').disabled = false; return showErr(r.error.message); }
+      $('insp').classList.add('hidden'); wkRender(); loadLoadouts();
+    };
+  };
+  $('inspBox').onclick = e => { const c = e.target.closest('[data-wpick]'); if (!c) return; const id = c.dataset.wpick; if (picked.has(id)) picked.delete(id); else if (picked.size < 4) picked.add(id); draw(); };
+  draw(); $('insp').classList.remove('hidden');
+}
 </script>
 </body>
 </html>
