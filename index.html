@@ -182,6 +182,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
 .card2.pickd{outline:3px solid var(--gold);outline-offset:-3px}
 .lvbig{font-size:3.2rem;font-weight:800;color:var(--gold);line-height:1}
 .xpbar{height:12px;background:#1f2b34;border-radius:6px;overflow:hidden;margin:.5rem 0} .xpbar div{height:100%;background:var(--gold)}
+.sq .pc.imgp{display:flex;align-items:center;justify-content:center;width:100%;height:100%;line-height:0}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -298,14 +299,14 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
     <div class="stat"><span>Elo</span><b id="ovElo"></b></div>
     <div class="stat hidden" id="ovXpRow"><span>XP</span><b id="ovXp"></b></div>
     <p class="note" id="ovNote"></p>
-    <div class="btns"><button class="primary" id="ovAgain">Play again</button><button id="ovClose">Close</button></div>
+    <div class="btns"><button class="primary hidden" id="ovDrop">Open your weekly drop</button><button class="primary" id="ovAgain">Play again</button><button id="ovClose">Close</button></div>
   </div>
 </div>
 <div id="caseScr" class="hidden"><div class="cbox"><button id="cscClose">← Back to inventory</button><div class="cshead" id="cscHead"></div><div class="grid" id="cscGrid"></div></div><div class="csfoot"><span id="cscKeys" style="color:var(--mute)"></span><button class="primary" id="cscOpen">Open case</button></div></div>
 <div id="roll" class="hidden"><div class="rbox"><h2 style="margin-bottom:.8rem">Opening case...</h2><div class="rview"><div id="rstrip"></div><div class="rmark"></div></div><button id="rskip">Skip</button></div></div>
 <div id="insp" class="hidden"><div class="box" id="inspBox"></div></div>
 <div id="dev" class="hidden"><div class="panel">
-  <div class="dh"><b>Dev tools</b><span class="btns"><button id="dvTabItems">Items</button><button id="dvTabColls">Collections</button><button id="dvTabCases">Cases</button><button id="dvTabOps">Operations</button><button id="dvTabShop">Shop keys</button><button id="dvTabShopC">Shop cases</button><button id="dvTabMoney">Money</button><button id="dvTabNews">News</button><button id="dvTabPuz">Puzzles</button><button id="dvTabWk">Weekly drops</button><button id="dvTabMed">Year flairs</button><button id="dvClose">Close</button></span></div>
+  <div class="dh"><b>Dev tools</b><span class="btns"><button id="dvTabItems">Items</button><button id="dvTabColls">Collections</button><button id="dvTabCases">Cases</button><button id="dvTabOps">Operations</button><button id="dvTabShop">Shop keys</button><button id="dvTabShopC">Shop cases</button><button id="dvTabMoney">Money</button><button id="dvTabNews">News</button><button id="dvTabPuz">Puzzles</button><button id="dvTabWk">Weekly drops</button><button id="dvTabMed">Year flairs</button><button id="dvTabSnd">Sound kits</button><button id="dvClose">Close</button></span></div>
   <div id="devBody"></div><div id="devMsg"></div>
 </div></div>
 <script src="https://cdn.jsdelivr.net/npm/fzstd@0.1.1/umd/index.js"></script>
@@ -476,7 +477,7 @@ function render() {
       const s = document.createElement('span');
       s.className = 'pc ' + p.color;
       const e = ids[name] && mode !== 'puzzle' && mode !== 'analysis' && (mode !== 'bot' || p.color === myColor) ? eq[p.color === 'w' ? 'white' : 'black'][ids[name].split(':')[1]] : null;
-      if (e && e.item.image_url) s.innerHTML = itemImg(e.item, e.seed, 'calc(var(--bs) / 8 * .72)', e.wear);
+      if (e && e.item.image_url) { s.innerHTML = itemImg(e.item, e.seed, 'calc(var(--bs) / 8 * .72)', e.wear); s.classList.add('imgp'); }
       else s.innerHTML = pieceHtml(p.type, p.color);
       d.appendChild(s);
     }
@@ -594,7 +595,21 @@ function hypoMoves(sq) {
   // what could my piece do if it were my turn right now (used for premoves)
   const parts = game.fen().split(' ');
   parts[1] = myColor; parts[3] = '-';
-  return new Chess(parts.join(' ')).moves({ square: sq, verbose: true });
+  const out = new Chess(parts.join(' ')).moves({ square: sq, verbose: true });
+  try {   // also allow a "recapture" premove onto one of your own pieces: it only fires if that piece gets taken
+    const opp = myColor === 'w' ? 'b' : 'w', t = new Chess(); t.clear();
+    game.board().forEach((row, r) => row.forEach((p, c) => {
+      if (!p) return;
+      const name = 'abcdefgh'[c] + (8 - r);
+      t.put({ type: p.type, color: (p.color === myColor && p.type !== 'k' && name !== sq) ? opp : p.color }, name);
+    }));
+    const f = t.fen().split(' '); f[1] = myColor; f[2] = '-'; f[3] = '-';
+    for (const m of new Chess(f.join(' ')).moves({ square: sq, verbose: true })) {
+      const tp = game.get(m.to);
+      if (m.captured && tp && tp.color === myColor && !out.some(o => o.to === m.to)) out.push(m);
+    }
+  } catch (e) { /* ignore */ }
+  return out;
 }
 function premoveClick(sq) {
   if (pre) { pre = null; sel = null; legal = []; render(); return; }   // any click cancels
@@ -643,8 +658,10 @@ function showResult(i) {
   if (xr && xr.xp) {
     $('ovXp').textContent = '+' + xr.xp + ' XP' + (xr.level_ups ? ' · LEVEL UP! Level ' + xr.level : '');
     if (xr.medal) $('ovNote').textContent = 'You earned the ' + xr.medal.year + ' medal, tier ' + xr.medal.tier + '! Your level reset to 1.';
-    else if (xr.level_ups) $('ovNote').textContent = 'Level up! Check the Weekly tab for your weekly drop.';
+    else if (xr.level_ups) $('ovNote').textContent = 'Level up!';
   }
+  $('ovDrop').classList.add('hidden');
+  if (xr && xr.level_ups) db.rpc('weekly_state').then(r => { if (r.data && r.data.drop_ready) { $('ovDrop').classList.remove('hidden'); if (!xr.medal) $('ovNote').textContent = 'Level up! Your weekly drop is ready.'; } });
   playSound(i.result === 'win' ? 'win' : i.result === 'draw' ? 'draw' : 'loss');
   if (xr && xr.level_ups) setTimeout(() => playSound('level_up'), 900);
   $('ov').classList.remove('hidden');
@@ -653,6 +670,7 @@ $('ovClose').onclick = () => $('ov').classList.add('hidden');
 $('ov').addEventListener('click', e => { if (e.target === $('ov')) $('ov').classList.add('hidden'); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') $('ov').classList.add('hidden'); });
 $('ovAgain').onclick = () => { $('ov').classList.add('hidden'); $('btnBot').click(); };
+$('ovDrop').onclick = () => { $('ov').classList.add('hidden'); wkOpenDrop(); };
 
 let suppressClick = false;
 $('board').addEventListener('click', e => {
@@ -787,7 +805,7 @@ async function engineMove(fen, b) {
 // how long a person would think: quick in bullet, longer in rapid, fast in the opening and on forced moves, careful with its own clock
 function botDelay(cat) {
   const n = game.history().length, nm = game.moves().length, caps = game.moves({ verbose: true }).filter(m => m.captured).length;
-  const scale = ({ bullet: 0.1, blitz: 0.35, rapid: 1, untimed: 0.45 })[cat];
+  const scale = ({ bullet: 0.17, blitz: 0.35, rapid: 1, untimed: 0.45 })[cat];
   // how hard the position is: many options, captures to weigh, or a check = more thinking; obvious moves are quick
   const hard = Math.min(1, Math.max(0, (nm - 3) / 28) * 0.8 + Math.min(caps, 3) * 0.08 + (game.in_check() ? 0.1 : 0));
   let d = (1.2 + hard * 18) * (0.55 + Math.random() * 0.9);                       // rapid: ~1s on easy moves, ~15s on tricky ones
@@ -887,14 +905,14 @@ $('btnResign').onclick = async () => {
 };
 
 // ---------- Dev tool (only shows for admin accounts; Supabase enforces is_admin on every save) ----------
-const KINDS = ['piece', 'set', 'charm', 'board', 'clock skin', 'username effect', 'win effect', 'loss effect', 'checkmate effect', 'draw effect', 'flair', 'sound kit'];
+const KINDS = ['piece', 'set', 'charm', 'board', 'clock skin', 'username effect', 'win effect', 'loss effect', 'checkmate effect', 'draw effect', 'flair'];
 const SOUND_EVENTS = [['move', 'Piece move'], ['capture', 'Capture'], ['castle', 'Castling'], ['check', 'Check'], ['promote', 'Promotion'], ['checkmate', 'Checkmate'], ['game_start', 'Game start'], ['win', 'You win'], ['loss', 'You lose'], ['draw', 'Draw'], ['low_time', 'Under 10 seconds'], ['puzzle_correct', 'Puzzle solved'], ['puzzle_wrong', 'Puzzle failed'], ['case_tick', 'Case roll tick'], ['case_reveal', 'Case reveal'], ['level_up', 'Level up'], ['purchase', 'Purchase'], ['claim', 'Claim a drop']];
 const RARITIES = ['gray', 'light blue', 'blue', 'purple', 'pink', 'red', 'gold'];
 const PIECES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'];
 const FX = ['none', 'color change', 'size change', 'brightness', 'pattern sheet'];
 const F = {
   items: [['name', 'text'], ['description', 'area'], ['kind', 'sel', KINDS], ['piece', 'sel', PIECES], ['rarity', 'sel', RARITIES], ['side', 'sel', ['both', 'white', 'black']],
-          ['wear_range', 'range'], ['brightness', 'bright'], ['is_pattern_based', 'chk'], ['pattern_effect', 'pcfg', FX], ['scratch_black', 'pscr'], ['allow_charms', 'pcharm'], ['board_light', 'pcol'], ['board_dark', 'pcol'], ['name_fx', 'psel', ['none', 'glow', 'pulse', 'rainbow', 'shimmer']], ['name_color', 'pcol'], ['pattern_sheet', 'patsheet'], ['sheet_mode', 'psmode'], ['is_default', 'chk'], ['collection_id', 'coll'], ['image_url', 'img'], ['set_images', 'setimgs'], ['sound_kit', 'sndkit']],
+          ['wear_range', 'range'], ['brightness', 'bright'], ['is_pattern_based', 'chk'], ['pattern_effect', 'pcfg', FX], ['scratch_black', 'pscr'], ['allow_charms', 'pcharm'], ['board_light', 'pcol'], ['board_dark', 'pcol'], ['name_fx', 'psel', ['none', 'glow', 'pulse', 'rainbow', 'shimmer']], ['name_color', 'pcol'], ['pattern_sheet', 'patsheet'], ['sheet_mode', 'psmode'], ['is_default', 'chk'], ['collection_id', 'coll'], ['image_url', 'img'], ['set_images', 'setimgs']],
   collections: [['name', 'text'], ['description', 'area'], ['is_active_drop', 'chk'], ['image_url', 'img']],
   cases: [['name', 'text'], ['description', 'area'], ['collection_id', 'coll'], ['allow_gold', 'chk'], ['image_url', 'img'], ['key_image_url', 'img']],
   operations: [['name', 'text'], ['description', 'area'], ['currency_piece', 'sel', PIECES], ['lasts_days', 'dur'], ['pass_price', 'money'], ['max_level', 'int'], ['xp_per_level', 'int'], ['image_url', 'img']],
@@ -929,6 +947,7 @@ $('dvTabColls').onclick = () => { devTab = 'collections'; devEdit = null; devRen
 $('dvTabCases').onclick = () => { devTab = 'cases'; devEdit = null; devRender(); };
 $('dvTabShopC').onclick = () => { devTab = 'shop_cases'; devEdit = null; devRender(); };
 $('dvTabWk').onclick = () => { devTab = 'weekly'; devEdit = null; devRender(); };
+$('dvTabSnd').onclick = () => { devTab = 'sounds'; devEdit = null; skEdit = null; devRender(); };
 $('dvTabMed').onclick = () => { devTab = 'medals'; devEdit = null; devRender(); };
 $('dvTabPuz').onclick = () => { devTab = 'puzzles'; devEdit = null; devRender(); };
 $('dvTabNews').onclick = () => { devTab = 'news'; devEdit = null; devRender(); };
@@ -1063,22 +1082,25 @@ $('devBody').addEventListener('input', e => {
 const nameOf = (list, id) => { const x = list.find(r => r.id === id); return x ? x.name : '-'; };
 async function devMoney() {
   const ses = await db.auth.getSession();
-  const r = await db.from('profiles').select('balance').eq('id', ses.data.session.user.id).single();
+  const [r, sc] = await Promise.all([db.from('profiles').select('balance').eq('id', ses.data.session.user.id).single(), db.rpc('dev_get_reward_scale')]);
   $('devBody').innerHTML = '<b>Your balance: $' + Number(r.data ? r.data.balance : 0).toFixed(2) + '</b><label for="dv_amt">Amount</label><input id="dv_amt" type="number" min="0" step="0.01" value="100">' +
-    '<div class="btns" style="margin-top:.8rem"><button class="primary" data-act="madd">Add money</button><button data-act="msub">Remove money</button></div>';
+    '<div class="btns" style="margin-top:.8rem"><button class="primary" data-act="madd">Add money</button><button data-act="msub">Remove money</button></div>' +
+    '<div class="sec"><b>How fast players earn money from games</b><p style="color:var(--mute);margin:.3rem 0 0">1 = the full amounts (up to $20 for beating the top bot). 0.1 pays a tenth of that. Smaller is slower.</p>' +
+    '<label for="dv_scale">Money multiplier</label><input id="dv_scale" type="number" min="0" step="0.01" value="' + (sc.error ? 0.1 : sc.data) + '"><div class="btns" style="margin-top:.6rem"><button class="primary" data-act="moneyscale">Save multiplier</button></div></div>';
 }
 async function devRender() {
   if (!devOpen) return;
-  for (const [id, t] of [['dvTabItems', 'items'], ['dvTabColls', 'collections'], ['dvTabOps', 'operations'], ['dvTabShop', 'shop_keys'], ['dvTabCases', 'cases'], ['dvTabShopC', 'shop_cases'], ['dvTabMoney', 'money'], ['dvTabNews', 'news'], ['dvTabPuz', 'puzzles'], ['dvTabWk', 'weekly'], ['dvTabMed', 'medals']]) $(id).className = devTab === t ? 'primary' : '';
+  for (const [id, t] of [['dvTabItems', 'items'], ['dvTabColls', 'collections'], ['dvTabOps', 'operations'], ['dvTabShop', 'shop_keys'], ['dvTabCases', 'cases'], ['dvTabShopC', 'shop_cases'], ['dvTabMoney', 'money'], ['dvTabNews', 'news'], ['dvTabPuz', 'puzzles'], ['dvTabWk', 'weekly'], ['dvTabMed', 'medals'], ['dvTabSnd', 'sounds']]) $(id).className = devTab === t ? 'primary' : '';
   if (devTab === 'money') return devMoney();
   if (devTab === 'puzzles') return devPuzzles();
   if (devTab === 'weekly') return devWeekly();
   if (devTab === 'medals') return devMedals();
+  if (devTab === 'sounds') return devSounds();
   const [ci, ii, rr, ca] = await Promise.all([db.from('collections').select('*').order('created_at'), db.from('items').select('*').order('created_at'),
                                           db.from(devTab).select('*').order('created_at', { ascending: false }), db.from('cases').select('*').order('created_at')]);
   const bad = ci.error || ii.error || rr.error || ca.error;
   if (bad) devErr(bad); else devMsg('');
-  devCases = ca.data || []; devColls = ci.data || []; devItems = ii.data || []; devRows = rr.data || [];
+  devCases = ca.data || []; devColls = ci.data || []; devItems = ii.data || []; devRows = (rr.data || []).filter(r => !(devTab === 'items' && r.kind === 'sound kit'));
   const cur = devEdit || {};
   let h = '<b>' + (devEdit ? 'Editing: ' + esc(rowName(cur)) : 'New ' + TITLE[devTab]) + '</b>' + formHtml(F[devTab], cur, 'dv_') +
     '<div class="btns" style="margin-top:.8rem"><button class="primary" data-act="save">' + (devEdit ? 'Save changes' : 'Create') + '</button>' + (devEdit ? '<button data-act="cancel">Close editor</button>' : '') + '</div>';
@@ -1118,6 +1140,24 @@ $('devBody').addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const a = b.dataset.act, id = b.dataset.id;
   try {
+    if (a === 'sksave') {
+      const name = $('sk_name').value.trim(); if (!name) throw new Error('Give the kit a name.');
+      const o = Object.assign({}, ((skEdit || {}).pattern_config || {}).sounds || {});
+      for (const [k] of SOUND_EVENTS) { const fi = $('dv_snd_' + k); if (fi && fi.files[0]) o[k] = await devUpload(fi.files[0], false); }
+      const img = $('sk_img').files[0] ? await devUpload($('sk_img').files[0], false) : (skEdit ? skEdit.image_url : null);
+      const row = { name, description: $('sk_desc').value.trim(), kind: 'sound kit', piece: 'pawn', side: 'both', rarity: $('sk_rar').value, collection_id: $('sk_col').value || null,
+        wear_cap: 1, wear_min: 0, wear_max: 0, is_pattern_based: false, is_default: false, image_url: img, pattern_config: Object.assign({}, (skEdit || {}).pattern_config || {}, { sounds: o, allow_charms: false }) };
+      const r = skEdit ? await db.from('items').update(row).eq('id', skEdit.id) : await db.from('items').insert(row);
+      if (r.error) throw r.error;
+      skEdit = null; devMsg('Sound kit saved.'); return devSounds();
+    }
+    if (a === 'skedit') { skEdit = devKits.find(k => k.id === id) || null; return devSounds(); }
+    if (a === 'skcancel') { skEdit = null; return devSounds(); }
+    if (a === 'skdel') {
+      if (!confirm('Delete this sound kit from the whole game? Players lose it.')) return;
+      const r = await db.rpc('dev_delete_item', { p_item: id }); if (r.error) throw r.error;
+      skEdit = null; devMsg('Deleted.'); return devSounds();
+    }
     if (a === 'wkxadd') {
       const it = $('wxe_item').value, cs = $('wxe_case').value, ch = Number($('wxe_chance').value);
       if (!!it === !!cs) throw new Error('Pick either an item or a case, not both.');
@@ -1139,7 +1179,7 @@ $('devBody').addEventListener('click', async e => {
     if (a === 'wkodds') {
       const rows = WK_RAR.map((r, i) => ({ collection_id: id, rarity: r, chance: Math.max(0, Number($('ro_' + id + '_' + i).value) || 0) }));
       const r1 = await db.from('collection_rarity_odds').upsert(rows, { onConflict: 'collection_id,rarity' }); if (r1.error) throw r1.error;
-      const r2 = await db.from('collections').update({ is_active_drop: $('ro_' + id + '_act').checked }).eq('id', id); if (r2.error) throw r2.error;
+      const r2 = await db.from('collections').update({ is_active_drop: $('ro_' + id + '_act').checked, weekly_max: $('ro_' + id + '_max').value === '' ? null : Math.max(0, Number($('ro_' + id + '_max').value)) }).eq('id', id); if (r2.error) throw r2.error;
       devMsg('Saved.'); return;
     }
     if (a === 'wkitems') {
@@ -1173,6 +1213,11 @@ $('devBody').addEventListener('click', async e => {
     }
     if (a === 'pzstop') { pzStop = true; return; }
     if (a === 'pzimp') { await puzzleImport(); return; }
+    if (a === 'moneyscale') {
+      const v = Number($('dv_scale').value); if (!(v >= 0)) throw new Error('Enter 0 or more.');
+      const { error } = await db.rpc('dev_set_reward_scale', { p_scale: v }); if (error) throw error;
+      devMsg('Saved.'); return devMoney();
+    }
     if (a === 'madd' || a === 'msub') {
       const amt = Number($('dv_amt').value);
       if (!(amt > 0)) throw new Error('Enter an amount above 0.');
@@ -2150,7 +2195,7 @@ async function devWeekly() {
     (cols.data || []).map(col => { const m = {}; (odds.data || []).filter(o => o.collection_id === col.id).forEach(o => { m[o.rarity] = o.chance; });
       return '<div class="li" style="display:block"><label style="display:flex;gap:.5rem;align-items:center;margin:0"><input id="ro_' + col.id + '_act" type="checkbox" style="width:auto"' + (col.is_active_drop ? ' checked' : '') + '><b>' + esc(col.name) + '</b> <span style="color:var(--mute)">in weekly drops</span></label>' +
         '<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:.4rem;margin-top:.5rem">' + WK_RAR.map((r, i) => '<div><small style="color:' + RCOL[r] + '">' + r + '</small>' + num('ro_' + col.id + '_' + i, m[r] != null ? m[r] : WK_DEF[i], 1) + '</div>').join('') + '</div>' +
-        '<div class="btns" style="margin-top:.5rem"><button data-act="wkodds" data-id="' + col.id + '">Save this collection</button></div></div>'; }).join('') + '</div>';
+        '<div style="margin-top:.5rem"><small style="color:var(--mute)">Most items from this collection in one drop (empty = no limit)</small>' + num('ro_' + col.id + '_max', col.weekly_max, 1) + '</div><div class="btns" style="margin-top:.5rem"><button data-act="wkodds" data-id="' + col.id + '">Save this collection</button></div></div>'; }).join('') + '</div>';
   devWkItems = (its.data || []).filter(i => i.collection_id);
   h += '<div class="sec"><b>3. Which items can drop, and how likely</b><p style="color:var(--mute);margin:.3rem 0 0">Tick the items that may appear in weekly drops. The weight sets how likely each one is against the other ticked items of the same rarity in its collection (the percent shown updates when you save).</p>' +
     (cols.data || []).map(col => { const list = devWkItems.filter(i => i.collection_id === col.id); if (!list.length) return '';
@@ -2200,8 +2245,8 @@ async function wkOpenDrop() {
   if (error) return showErr(error.message);
   const picked = new Set();
   const draw = () => {
-    $('inspBox').innerHTML = '<h2 style="margin-bottom:.4rem">Weekly drop</h2><p style="color:var(--mute);margin-bottom:.8rem">Pick 4 of these ' + data.length + ' items.</p><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(105px,1fr))">' +
-      data.map(it => '<div class="card2' + (picked.has(it.id) ? ' pickd' : '') + '" data-wpick="' + it.id + '" style="cursor:pointer"><div class="cin"><div class="cimg">' + (it.is_case ? (it.image_url ? '<img src="' + esc(it.image_url) + '" alt="" draggable="false">' : '<div class="boxph">▣</div>') : itemImg(it, 1, 66, 0)) + '</div><b>' + esc(it.name) + (it.is_case ? ' (case)' : '') + '</b><small style="color:' + (RCOL[it.rarity] || '#fff') + ';display:block">' + esc(it.rarity) +
+    $('inspBox').innerHTML = '<h2 style="margin-bottom:.4rem">Weekly drop</h2><p style="color:var(--mute);margin-bottom:.8rem">Pick 4 of these ' + data.length + ' items. Right-click an item to inspect it and see its wear.</p><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(105px,1fr))">' +
+      data.map(it => '<div class="card2' + (picked.has(it.id) ? ' pickd' : '') + '" data-wpick="' + it.id + '" style="cursor:pointer"><div class="cin"><div class="cimg">' + (it.is_case ? (it.image_url ? '<img src="' + esc(it.image_url) + '" alt="" draggable="false">' : '<div class="boxph">▣</div>') : itemImg(it, it.pattern_seed || 1, 66, it.wear || 0)) + '</div><b>' + esc(it.name) + (it.is_case ? ' (case)' : '') + '</b><small style="color:' + (RCOL[it.rarity] || '#fff') + ';display:block">' + esc(it.rarity) +
         '</small></div><div class="rbar" style="background:' + (RCOL[it.rarity] || RCOL.gray) + '"></div></div>').join('') + '</div><div class="btns" style="margin-top:1rem"><button class="primary" id="wkClaim"' + (picked.size === 4 ? '' : ' disabled') + '>Claim (' + picked.size + ' / 4)</button><button id="inspClose">Later</button></div>';
     $('inspClose').onclick = () => $('insp').classList.add('hidden');
     $('wkClaim').onclick = async () => {
@@ -2212,6 +2257,16 @@ async function wkOpenDrop() {
     };
   };
   $('inspBox').onclick = e => { const c = e.target.closest('[data-wpick]'); if (!c) return; const id = c.dataset.wpick; if (picked.has(id)) picked.delete(id); else if (picked.size < 4) picked.add(id); draw(); };
+  $('inspBox').oncontextmenu = e => {
+    const c = e.target.closest('[data-wpick]'); if (!c) return;
+    e.preventDefault();
+    const it = data.find(x => x.id === c.dataset.wpick); if (!it) return;
+    if (it.is_case) {
+      $('inspBox').innerHTML = (it.image_url ? '<img src="' + esc(it.image_url) + '" alt="" style="max-height:150px;max-width:100%" draggable="false">' : '<div class="boxph" style="font-size:5rem">▣</div>') +
+        '<h3 style="margin:.5rem 0">' + esc(it.name) + ' (case)</h3><div style="color:var(--mute)">' + esc(it.description || '') + '</div><div class="btns" style="margin-top:1rem"><button class="primary" id="inspClose">Back</button></div>';
+    } else inspect(it, Number(it.wear) || 0, it.pattern_seed, null);
+    $('inspClose').onclick = draw;
+  };
   draw(); $('insp').classList.remove('hidden');
 }
 
@@ -2259,6 +2314,28 @@ try { sndOn = localStorage.getItem('sndOn') !== '0'; sndVol = (Number(localStora
 $('sndOn').checked = sndOn; $('sndVol').value = Math.round(sndVol * 100);
 $('sndOn').onchange = () => { sndOn = $('sndOn').checked; try { localStorage.setItem('sndOn', sndOn ? '1' : '0'); } catch (e) { /* ignore */ } };
 $('sndVol').oninput = () => { sndVol = Number($('sndVol').value) / 100; try { localStorage.setItem('sndVol', $('sndVol').value); } catch (e) { /* ignore */ } };
+
+// ---------- Dev: sound kits (their own section) ----------
+let skEdit = null, devKits = [];
+function sndZones(sv) {
+  return '<label>sounds: one audio file per event (mp3, wav or ogg)</label><div class="drop" data-for="dv_snd_bulk">Drop ALL the sound files here at once. Name each file after its event (move.wav, capture.mp3, ...)</div><input id="dv_snd_bulk" type="file" accept="audio/*" multiple hidden>' +
+    SOUND_EVENTS.map(([k, t]) => '<label for="dv_snd_' + k + '" style="margin-top:.2rem">' + t + ' <small>(' + k + ')</small>' + (sv[k] ? ' <a href="#" data-playsnd="' + esc(sv[k]) + '">play</a>' : '') + '</label><div class="drop" data-for="dv_snd_' + k + '">' + (sv[k] ? 'Sound set. Drop a new one to replace it.' : 'Drop a sound here, or click') + '</div><input id="dv_snd_' + k + '" type="file" accept="audio/*" hidden>').join('');
+}
+async function devSounds() {
+  const [r, cols] = await Promise.all([db.from('items').select('*').eq('kind', 'sound kit').order('created_at', { ascending: false }), db.from('collections').select('id,name').order('created_at')]);
+  if (r.error) { $('devBody').innerHTML = '<p style="color:var(--danger)">' + esc(r.error.message) + '</p>'; return; }
+  devKits = r.data || [];
+  const cur = skEdit || {}, sv = (cur.pattern_config || {}).sounds || {};
+  const sel = (id, list) => '<select id="' + id + '">' + list.map(o => '<option value="' + esc(o[0]) + '"' + (String(cur[id === 'sk_rar' ? 'rarity' : 'collection_id'] || '') === String(o[0]) ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') + '</select>';
+  $('devBody').innerHTML = '<b>' + (skEdit ? 'Editing sound kit: ' + esc(cur.name) : 'New sound kit') + '</b>' +
+    '<p style="color:var(--mute);margin:.3rem 0 0">A sound kit is an item players equip in the Sound kit slot of their loadout. Any sound you leave out uses the built-in sound. The starter kit zip has a ready-made file for every event.</p>' +
+    '<label for="sk_name">Name</label><input id="sk_name" value="' + esc(cur.name) + '"><label for="sk_desc">Description</label><textarea id="sk_desc" rows="2">' + esc(cur.description) + '</textarea>' +
+    '<label for="sk_rar">Rarity</label>' + sel('sk_rar', RARITIES.map(x => [x, x])) + '<label for="sk_col">Collection (optional)</label>' + sel('sk_col', [['', '(none)']].concat((cols.data || []).map(c => [c.id, c.name]))) +
+    '<label for="sk_img">Cover image (optional)</label><div class="drop" data-for="sk_img">' + (cur.image_url ? 'Image set. Drop a new one to replace it.' : 'Drop an image here, or click') + '</div><input id="sk_img" type="file" accept="image/*" hidden>' +
+    sndZones(sv) + '<div class="btns" style="margin-top:.8rem"><button class="primary" data-act="sksave">' + (skEdit ? 'Save changes' : 'Create sound kit') + '</button>' + (skEdit ? '<button data-act="skcancel">Cancel edit</button>' : '') + '</div>' +
+    '<hr style="border-color:var(--line);margin:1.2rem 0"><b>' + devKits.length + ' sound kits</b>' +
+    devKits.map(k => { const n = Object.keys((k.pattern_config || {}).sounds || {}).length; return '<div class="li">' + (k.image_url ? '<img src="' + esc(k.image_url) + '" alt="">' : '') + '<div><b>' + esc(k.name) + '</b><br><small>' + n + ' of ' + SOUND_EVENTS.length + ' sounds · ' + esc(k.rarity) + '</small></div><button data-act="skedit" data-id="' + k.id + '">Edit</button><button data-act="skdel" data-id="' + k.id + '">Delete</button></div>'; }).join('');
+}
 </script>
 </body>
 </html>
