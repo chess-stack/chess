@@ -244,6 +244,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
         </div>
         <div class="btns">
           <button id="btnBot" class="primary">Play bot</button>
+          <button id="btnDraw">Offer draw</button>
           <button id="btnResign">Resign</button>
         </div>
       </div>
@@ -315,7 +316,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
 <div id="roll" class="hidden"><div class="rbox"><h2 style="margin-bottom:.8rem">Opening case...</h2><div class="rview"><div id="rstrip"></div><div class="rmark"></div></div><button id="rskip">Skip</button></div></div>
 <div id="insp" class="hidden"><div class="box" id="inspBox"></div></div>
 <div id="dev" class="hidden"><div class="panel">
-  <div class="dh"><b>Dev tools</b><span class="btns"><button id="dvTabItems">Items</button><button id="dvTabColls">Collections</button><button id="dvTabCases">Cases</button><button id="dvTabOps">Operations</button><button id="dvTabShop">Shop keys</button><button id="dvTabShopC">Shop cases</button><button id="dvTabMoney">Money</button><button id="dvTabNews">News</button><button id="dvTabPuz">Puzzles</button><button id="dvTabWk">Weekly drops</button><button id="dvTabMed">Year flairs</button><button id="dvTabSnd">Sound kits</button><button id="dvClose">Close</button></span></div>
+  <div class="dh"><b>Dev tools</b><span class="btns"><button id="dvTabItems">Items</button><button id="dvTabColls">Collections</button><button id="dvTabCases">Cases</button><button id="dvTabOps">Operations</button><button id="dvTabShop">Shop keys</button><button id="dvTabShopC">Shop cases</button><button id="dvTabMoney">Money</button><button id="dvTabNews">News</button><button id="dvTabPuz">Puzzles</button><button id="dvTabWk">Weekly drops</button><button id="dvTabMed">Year flairs</button><button id="dvTabSnd">Sound kits</button><button id="dvTabSet">Settings</button><button id="dvClose">Close</button></span></div>
   <div id="devBody"></div><div id="devMsg"></div>
 </div></div>
 <script src="https://cdn.jsdelivr.net/npm/fzstd@0.1.1/umd/index.js"></script>
@@ -463,6 +464,9 @@ function idMap() {
 }
 function render() {
   const ids = (mode === 'puzzle' || mode === 'analysis') ? {} : idMap();
+  if (drag && drag.on) {   // you are still holding a piece: keep it in your hand, and recompute where it can go in the new position
+    if (!trySelect(drag.sq)) { if (ghost) { ghost.remove(); ghost = null; } drag = null; sel = null; legal = []; }
+  }
   applyBoard();
   const b = $('board');
   b.innerHTML = '';
@@ -498,6 +502,7 @@ function render() {
   renderMaterial();
   renderStatus();
   moveSound();
+  if (drag && drag.on) { const src = document.querySelector('.sq[data-sq="' + drag.sq + '"] .pc'); if (src) src.style.opacity = '.3'; }
 }
 
 function renderStatus() {
@@ -600,24 +605,35 @@ window.addEventListener('mouseup', e => {
 });
 
 // ----- premoves -----
+function attackedSquares(sq, p) {   // every square this piece could capture on, ignoring check rules (used for recapture premoves)
+  const f = 'abcdefgh'.indexOf(sq[0]), r = Number(sq[1]) - 1, out = [];
+  const add = (ff, rr) => { if (ff >= 0 && ff < 8 && rr >= 0 && rr < 8) out.push('abcdefgh'[ff] + (rr + 1)); };
+  const slide = dirs => dirs.forEach(([df, dr]) => {
+    let ff = f + df, rr = r + dr;
+    while (ff >= 0 && ff < 8 && rr >= 0 && rr < 8) { const n = 'abcdefgh'[ff] + (rr + 1); out.push(n); if (game.get(n)) break; ff += df; rr += dr; }
+  });
+  if (p.type === 'p') { const d = p.color === 'w' ? 1 : -1; add(f - 1, r + d); add(f + 1, r + d); }
+  else if (p.type === 'n') [[1, 2], [2, 1], [-1, 2], [-2, 1], [1, -2], [2, -1], [-1, -2], [-2, -1]].forEach(([a, b]) => add(f + a, r + b));
+  else if (p.type === 'k') { for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) if (a || b) add(f + a, r + b); }
+  else if (p.type === 'b') slide([[1, 1], [1, -1], [-1, 1], [-1, -1]]);
+  else if (p.type === 'r') slide([[1, 0], [-1, 0], [0, 1], [0, -1]]);
+  else if (p.type === 'q') slide([[1, 1], [1, -1], [-1, 1], [-1, -1], [1, 0], [-1, 0], [0, 1], [0, -1]]);
+  return out;
+}
 function hypoMoves(sq) {
   // what could my piece do if it were my turn right now (used for premoves)
   const parts = game.fen().split(' ');
   parts[1] = myColor; parts[3] = '-';
   const out = new Chess(parts.join(' ')).moves({ square: sq, verbose: true });
-  try {   // also allow a "recapture" premove onto one of your own pieces: it only fires if that piece gets taken
-    const opp = myColor === 'w' ? 'b' : 'w', t = new Chess(); t.clear();
-    game.board().forEach((row, r) => row.forEach((p, c) => {
-      if (!p) return;
-      const name = 'abcdefgh'[c] + (8 - r);
-      t.put({ type: p.type, color: (p.color === myColor && p.type !== 'k' && name !== sq) ? opp : p.color }, name);
-    }));
-    const f = t.fen().split(' '); f[1] = myColor; f[2] = '-'; f[3] = '-';
-    for (const m of new Chess(f.join(' ')).moves({ square: sq, verbose: true })) {
-      const tp = game.get(m.to);
-      if (m.captured && tp && tp.color === myColor && !out.some(o => o.to === m.to)) out.push(m);
+  const p = game.get(sq);
+  if (p) {   // recapture premoves: aim at one of your own pieces. It only fires if the opponent takes that piece, otherwise nothing happens
+    for (const t of attackedSquares(sq, p)) {
+      const q = game.get(t);
+      if (q && q.color === myColor && q.type !== 'k' && !out.some(o => o.to === t)) {
+        out.push({ from: sq, to: t, color: p.color, piece: p.type, captured: q.type, flags: 'c', promotion: (p.type === 'p' && (t[1] === '8' || t[1] === '1')) ? 'q' : undefined });
+      }
     }
-  } catch (e) { /* ignore */ }
+  }
   return out;
 }
 async function premoveClick(sq) {
@@ -771,6 +787,7 @@ window.addEventListener('pointerup', async e => {
   if (!d.on) return;
   suppressClick = true; setTimeout(() => { suppressClick = false; }, 0);
   const to = squareAt(e.clientX, e.clientY);
+  if (!trySelect(d.sq)) { sel = null; legal = []; render(); return; }       // the position may have changed while you were holding the piece
   if (!(to && to !== d.sq && legal.find(m => m.to === to))) { sel = null; legal = []; render(); return; }
   let pr = 'q';
   if (legal.some(m => m.to === to && m.promotion)) { pr = await askPromo(game.get(d.sq).color); if (!pr) { sel = null; legal = []; render(); return; } }
@@ -893,7 +910,7 @@ async function finish(result, reason, quiet) {
   const id = botGame; if (!id) return;
   botGame = null; pre = null; if (clock) clock.over = true;
   if (!result) result = game.in_checkmate() ? (game.turn() === myColor ? 'loss' : 'win') : 'draw';
-  if (!reason) reason = game.in_checkmate() ? 'Checkmate' : game.in_stalemate() ? 'Stalemate' : game.in_threefold_repetition() ? 'Draw by repetition' : game.insufficient_material() ? 'Not enough pieces' : 'Draw';
+  if (!reason) reason = game.in_checkmate() ? 'Checkmate' : game.in_stalemate() ? 'Stalemate' : game.in_threefold_repetition() ? 'Draw by repetition' : game.insufficient_material() ? 'Not enough pieces to checkmate' : Number(game.fen().split(' ')[4]) >= 100 ? 'Draw by the 50-move rule' : 'Draw';
   if (result === 'win' && reason === 'Checkmate') db.rpc('quest_event', { p_kind: 'give checkmate', p_amount: 1 });
   const plies = game.history().length, before = profElo;
   const { data, error } = await db.rpc('finish_bot_game', { p_game_id: id, p_result: result, p_plies: plies, p_mode: (clock && clock.cat) || 'rapid' });
@@ -924,6 +941,15 @@ $('btnBot').onclick = async () => {
   if (game.turn() !== myColor) botTurn();
 };
 
+$('btnDraw').onclick = async () => {   // the bot takes a draw when it is not ahead and the game is well under way
+  if (mode !== 'bot' || !botGame || game.game_over() || thinking) return;
+  const val = { p: 1, n: 3, b: 3, r: 5, q: 9 }, botC = myColor === 'w' ? 'b' : 'w', tot = c => { const m = sideMaterial(c); return Object.keys(m).reduce((a, k) => a + m[k] * val[k], 0); };
+  if (game.history().length < 30) { $('status').textContent = 'The bot says it is too early to agree to a draw.'; return; }
+  if (tot(botC) > tot(myColor)) { $('status').textContent = 'The bot declines the draw. It likes its position.'; return; }
+  await finish('draw', 'Draw by agreement');
+  mode = 'local'; render();
+  $('status').textContent = 'Draw agreed.';
+};
 $('btnResign').onclick = async () => {
   if (mode !== 'bot' || !botGame || game.game_over()) return;
   const early = game.history().length < 50;
@@ -976,6 +1002,7 @@ $('dvTabColls').onclick = () => { devTab = 'collections'; devEdit = null; devRen
 $('dvTabCases').onclick = () => { devTab = 'cases'; devEdit = null; devRender(); };
 $('dvTabShopC').onclick = () => { devTab = 'shop_cases'; devEdit = null; devRender(); };
 $('dvTabWk').onclick = () => { devTab = 'weekly'; devEdit = null; devRender(); };
+$('dvTabSet').onclick = () => { devTab = 'settings'; devEdit = null; devRender(); };
 $('dvTabSnd').onclick = () => { devTab = 'sounds'; devEdit = null; skEdit = null; devRender(); };
 $('dvTabMed').onclick = () => { devTab = 'medals'; devEdit = null; devRender(); };
 $('dvTabPuz').onclick = () => { devTab = 'puzzles'; devEdit = null; devRender(); };
@@ -1125,12 +1152,13 @@ async function devMoney() {
 }
 async function devRender() {
   if (!devOpen) return;
-  for (const [id, t] of [['dvTabItems', 'items'], ['dvTabColls', 'collections'], ['dvTabOps', 'operations'], ['dvTabShop', 'shop_keys'], ['dvTabCases', 'cases'], ['dvTabShopC', 'shop_cases'], ['dvTabMoney', 'money'], ['dvTabNews', 'news'], ['dvTabPuz', 'puzzles'], ['dvTabWk', 'weekly'], ['dvTabMed', 'medals'], ['dvTabSnd', 'sounds']]) $(id).className = devTab === t ? 'primary' : '';
+  for (const [id, t] of [['dvTabItems', 'items'], ['dvTabColls', 'collections'], ['dvTabOps', 'operations'], ['dvTabShop', 'shop_keys'], ['dvTabCases', 'cases'], ['dvTabShopC', 'shop_cases'], ['dvTabMoney', 'money'], ['dvTabNews', 'news'], ['dvTabPuz', 'puzzles'], ['dvTabWk', 'weekly'], ['dvTabMed', 'medals'], ['dvTabSnd', 'sounds'], ['dvTabSet', 'settings']]) $(id).className = devTab === t ? 'primary' : '';
   if (devTab === 'money') return devMoney();
   if (devTab === 'puzzles') return devPuzzles();
   if (devTab === 'weekly') return devWeekly();
   if (devTab === 'medals') return devMedals();
   if (devTab === 'sounds') return devSounds();
+  if (devTab === 'settings') return devSettings();
   const [ci, ii, rr, ca, icq] = await Promise.all([db.from('collections').select('*').order('created_at'), db.from('items').select('*').order('created_at'),
                                           db.from(devTab).select('*').order('created_at', { ascending: false }), db.from('cases').select('*').order('created_at'), db.from('item_collections').select('*')]);
   const bad = ci.error || ii.error || rr.error || ca.error;
@@ -1175,6 +1203,10 @@ $('devBody').addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const a = b.dataset.act, id = b.dataset.id;
   try {
+    if (a === 'stsave') {
+      const { error } = await db.rpc('dev_set_flag', { p_key: 'tradeup_preview', p_on: $('st_tu').checked }); if (error) throw error;
+      devMsg('Settings saved for everyone.'); return devSettings();
+    }
     if (a === 'sksave') {
       const name = $('sk_name').value.trim(); if (!name) throw new Error('Give the kit a name.');
       const o = Object.assign({}, ((skEdit || {}).pattern_config || {}).sounds || {});
@@ -1795,11 +1827,26 @@ function renderClocks() {
   if (live && game.turn() === myColor) { if (mine < 10000 && !clock.warned) { clock.warned = true; playSound('low_time'); } else if (mine >= 10000) clock.warned = false; }
   if (live && val(game.turn()) <= 0) clockFlag(game.turn());
 }
+function sideMaterial(color) {
+  const m = { p: 0, n: 0, b: 0, r: 0, q: 0 };
+  game.board().forEach(row => row.forEach(p => { if (p && p.color === color && p.type !== 'k') m[p.type]++; }));
+  return m;
+}
+function canMate(x, y) {   // out of time is only a loss if the other side could still checkmate with what is left
+  const a = sideMaterial(x), b = sideMaterial(y);
+  if (a.p || a.r || a.q) return true;
+  const minors = a.n + a.b;
+  if (minors >= 2) return true;
+  if (minors === 1) return (b.p + b.n + b.b + b.r + b.q) > 0;
+  return false;
+}
 function clockFlag(c) {
   if (flagging || !botGame) return;
   flagging = true; clock.ms[c] = 0;
-  const lost = c === myColor;
-  finish(lost ? 'loss' : 'win', lost ? 'You ran out of time' : 'Opponent ran out of time').finally(() => { flagging = false; });
+  const lost = c === myColor, other = c === 'w' ? 'b' : 'w';
+  const end = canMate(other, c) ? finish(lost ? 'loss' : 'win', lost ? 'You ran out of time' : 'Opponent ran out of time')
+    : finish('draw', 'Out of time, but ' + (lost ? 'the bot' : 'you') + ' cannot checkmate with the pieces left');
+  end.finally(() => { flagging = false; });
 }
 setInterval(renderClocks, 100);
 
@@ -2396,6 +2443,7 @@ async function devSounds() {
 const RAR_ORDER = ['gray', 'light blue', 'blue', 'purple', 'pink', 'red', 'gold'];
 const tuNextR = r => { const i = RAR_ORDER.indexOf(r); return i >= 0 && i <= 4 ? RAR_ORDER[i + 1] : null; };   // red cannot go up: gold is never a trade-up result
 let tu = { inv: [], items: [], sel: [] };
+let pubSettings = { tradeup_preview: true };
 const tuItem = id => tu.items.find(i => i.id === id) || {};
 function tuValidCols(it) {   // the collections of this item that really have something one rarity up
   const n = tuNextR(it.rarity); if (!n) return [];
@@ -2403,8 +2451,9 @@ function tuValidCols(it) {   // the collections of this item that really have so
 }
 async function tuRender() {
   const ses = await db.auth.getSession(); if (!ses.data.session) return;
-  const [inv, its] = await Promise.all([db.from('inventory').select('*').eq('owner_id', ses.data.session.user.id).order('acquired_at', { ascending: false }), db.from('items').select('*'), loadIC()]);
+  const [inv, its, , ps] = await Promise.all([db.from('inventory').select('*').eq('owner_id', ses.data.session.user.id).order('acquired_at', { ascending: false }), db.from('items').select('*'), loadIC(), db.rpc('get_public_settings')]);
   if (view !== 'tu') return;
+  pubSettings = Object.assign({ tradeup_preview: true }, (ps && ps.data) || {});
   tu.inv = inv.data || []; tu.items = its.data || []; tu.sel = tu.sel.filter(id => tu.inv.some(r => r.id === id));
   tuDraw();
 }
@@ -2424,6 +2473,7 @@ function tuDraw() {
     outs = Object.entries(p).sort((a, b) => b[1] - a[1]).map(([id, w]) => { const o = tuItem(id), ow = Number(o.wear_min) + avg * (Number(o.wear_max) - Number(o.wear_min));
       return '<div class="li"><div style="width:40px;text-align:center">' + itemImg(o, 1, 36, ow) + '</div><div><b style="color:' + (RCOL[o.rarity] || '#fff') + '">' + esc(o.name) + '</b><br><small>' + (Math.round(1000 * w / tot) / 10) + '% · about ' + COND(ow) + ' (' + ow.toFixed(4) + ')</small></div></div>'; }).join('');
   }
+  if (!pubSettings.tradeup_preview) { avgTxt = ''; outs = ''; }
   const cards = tu.inv.map(r => {
     const it = tuItem(r.item_id); if (!it.id) return '';
     const ok = tuNextR(it.rarity) && tuValidCols(it).length > 0, picked = tu.sel.includes(r.id);
@@ -2434,7 +2484,7 @@ function tuDraw() {
   $('tuView').innerHTML = '<h2 style="margin-bottom:.4rem">Trade up</h2><p style="color:var(--mute);margin-bottom:.8rem">Pick 10 items of the same rarity and get 1 item of the next rarity up. The result comes from the collections of the items you put in, and its wear follows the wear of your picks. Gold can only come from cases.</p>' +
     '<div class="tugrid"><div><b>Your items</b><div class="grid" style="margin-top:.5rem;grid-template-columns:repeat(auto-fill,minmax(112px,1fr))">' + (cards || '<p style="color:var(--mute)">You have no items yet.</p>') + '</div></div>' +
     '<div class="op" style="position:sticky;top:.5rem"><b>Selected: ' + sel.length + ' / 10</b>' + (rar ? ' <small style="color:' + (RCOL[rar] || '#fff') + '">' + esc(rar) + ' → ' + esc(tuNextR(rar) || '') + '</small>' : '') +
-    '<div style="margin:.4rem 0;color:var(--mute);font-size:.85rem">' + (avgTxt || 'Pick items to see the possible results.') + '</div>' + (outs ? '<b>Possible results</b>' + outs : '') +
+    '<div style="margin:.4rem 0;color:var(--mute);font-size:.85rem">' + (avgTxt || (pubSettings.tradeup_preview ? 'Pick items to see the possible results.' : 'What you can get is a surprise.')) + '</div>' + (outs ? '<b>Possible results</b>' + outs : '') +
     '<div class="btns" style="margin-top:.8rem"><button class="primary" id="tuGo"' + (sel.length === 10 ? '' : ' disabled') + '>Trade up</button><button id="tuClear">Clear</button></div></div></div>';
   $('tuClear').onclick = () => { tu.sel = []; tuDraw(); };
   $('tuGo').onclick = async () => {
@@ -2452,6 +2502,16 @@ $('tuView').addEventListener('click', e => {
   if (tu.sel.includes(id)) tu.sel = tu.sel.filter(x => x !== id); else if (tu.sel.length < 10) tu.sel.push(id);
   tuDraw();
 });
+
+// ---------- Dev: game settings (turn things on or off for everyone) ----------
+async function devSettings() {
+  const r = await db.rpc('get_public_settings');
+  const on = r.error ? true : r.data.tradeup_preview !== false;
+  $('devBody').innerHTML = '<b>Game settings</b><p style="color:var(--mute);margin:.3rem 0 0">These apply to every player right away.</p>' +
+    (r.error ? '<p style="color:var(--danger)">' + esc(r.error.message) + ' (run the SQL step first)</p>' : '') +
+    '<label style="display:flex;gap:.6rem;align-items:center;text-transform:none;margin-top:1rem"><input type="checkbox" id="st_tu" style="width:auto"' + (on ? ' checked' : '') + '> Show players the possible trade-up results and their floats</label>' +
+    '<div class="btns" style="margin-top:.8rem"><button class="primary" data-act="stsave">Save settings</button></div>';
+}
 </script>
 </body>
 </html>
