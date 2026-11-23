@@ -45,7 +45,7 @@ main{display:flex;flex-wrap:wrap;gap:1.4rem;justify-content:center;padding:1.4re
 .sq.hint:not(.cap){background-image:radial-gradient(circle,rgba(17,32,43,.38) 0 14%,transparent 15%)}
 .sq.hint.cap{outline:4px solid rgba(17,32,43,.45);outline-offset:-4px}
 nav{display:flex;gap:.5rem;padding:.6rem 1.2rem;border-bottom:1px solid var(--line)}
-#opsView,#shopView,#invView,#loView,#rtView,#wkView,#tuView{max-width:820px;margin:0 auto;padding:1.2rem}
+#opsView,#shopView,#invView,#loView,#rtView,#wkView,#tuView,#mkView{max-width:820px;margin:0 auto;padding:1.2rem}
 .op{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:1rem;margin-bottom:1rem}
 .op.over{opacity:.6}
 .op h3{margin:0;font-family:Georgia,serif}
@@ -190,6 +190,9 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
 .card2.dim{opacity:.35;cursor:not-allowed}
 .tugrid{display:grid;grid-template-columns:1fr 340px;gap:1rem;align-items:start}
 @media (max-width:820px){.tugrid{grid-template-columns:1fr}}
+.mktbl{width:100%;border-collapse:collapse;font-size:.85rem} .mktbl td,.mktbl th{padding:.35rem .5rem;border-bottom:1px solid var(--line);text-align:left}
+.mkadm{border:1px dashed var(--gold);border-radius:10px;padding:.9rem;margin:1rem 0;background:rgba(240,180,41,.05)}
+.mkadm label{display:block;color:var(--mute);font-size:.8rem;margin-top:.5rem}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -298,6 +301,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
   <section id="rtView" class="hidden"></section>
   <section id="wkView" class="hidden"></section>
   <section id="tuView" class="hidden"></section>
+  <section id="mkView" class="hidden"></section>
 </section>
 
 <div id="ov" class="hidden" role="dialog" aria-modal="true">
@@ -1368,7 +1372,7 @@ async function loadOps() {
   if (view.startsWith('op:') && !ops.find(o => 'op:' + o.id === view)) showView('play'); else navRender();
 }
 function navRender() {
-  $('nav').innerHTML = '<button data-v="play">Play</button><button data-v="pz">Puzzles</button><button data-v="rt">Ratings</button><button data-v="wk">Weekly</button><button data-v="tu">Trade up</button><button data-v="an">Analysis</button><button data-v="inv">Inventory</button><button data-v="lo">Loadout</button>' + ops.map(o => '<button data-v="op:' + o.id + '">' + esc(o.name) + '</button>').join('') + '<button data-v="shop">Shop</button>';
+  $('nav').innerHTML = '<button data-v="play">Play</button><button data-v="pz">Puzzles</button><button data-v="rt">Ratings</button><button data-v="wk">Weekly</button><button data-v="tu">Trade up</button><button data-v="mk">Market</button><button data-v="an">Analysis</button><button data-v="inv">Inventory</button><button data-v="lo">Loadout</button>' + ops.map(o => '<button data-v="op:' + o.id + '">' + esc(o.name) + '</button>').join('') + '<button data-v="shop">Shop</button>';
   $('nav').querySelectorAll('button').forEach(b => { b.className = b.dataset.v === view ? 'primary' : ''; });
 }
 $('nav').addEventListener('click', e => { const b = e.target.closest('button'); if (b) showView(b.dataset.v); });
@@ -1382,8 +1386,8 @@ function showView(v) {
   view = v; navRender();
   if (v === 'pz') puzzleEnter();
   if (v === 'an') anEnter();
-  $('playView').classList.toggle('hidden', v !== 'play' && v !== 'pz' && v !== 'an'); $('opsView').classList.toggle('hidden', !v.startsWith('op:')); $('shopView').classList.toggle('hidden', v !== 'shop'); $('invView').classList.toggle('hidden', v !== 'inv'); $('loView').classList.toggle('hidden', v !== 'lo'); $('rtView').classList.toggle('hidden', v !== 'rt'); $('wkView').classList.toggle('hidden', v !== 'wk'); $('tuView').classList.toggle('hidden', v !== 'tu');
-  if (v.startsWith('op:')) opRender(v.slice(3)); else if (v === 'shop') shopRender(); else if (v === 'inv') invRender(); else if (v === 'lo') loadLoadouts().then(loRender); else if (v === 'rt') rtRender(); else if (v === 'wk') wkRender(); else if (v === 'tu') tuRender();
+  $('playView').classList.toggle('hidden', v !== 'play' && v !== 'pz' && v !== 'an'); $('opsView').classList.toggle('hidden', !v.startsWith('op:')); $('shopView').classList.toggle('hidden', v !== 'shop'); $('invView').classList.toggle('hidden', v !== 'inv'); $('loView').classList.toggle('hidden', v !== 'lo'); $('rtView').classList.toggle('hidden', v !== 'rt'); $('wkView').classList.toggle('hidden', v !== 'wk'); $('tuView').classList.toggle('hidden', v !== 'tu'); $('mkView').classList.toggle('hidden', v !== 'mk');
+  if (v.startsWith('op:')) opRender(v.slice(3)); else if (v === 'shop') shopRender(); else if (v === 'inv') invRender(); else if (v === 'lo') loadLoadouts().then(loRender); else if (v === 'rt') rtRender(); else if (v === 'wk') wkRender(); else if (v === 'tu') tuRender(); else if (v === 'mk') mkRender();
 }
 function fmtLeft(ms) {
   if (ms <= 0) return 'Ended';
@@ -2511,6 +2515,171 @@ async function devSettings() {
     (r.error ? '<p style="color:var(--danger)">' + esc(r.error.message) + ' (run the SQL step first)</p>' : '') +
     '<label style="display:flex;gap:.6rem;align-items:center;text-transform:none;margin-top:1rem"><input type="checkbox" id="st_tu" style="width:auto"' + (on ? ' checked' : '') + '> Show players the possible trade-up results and their floats</label>' +
     '<div class="btns" style="margin-top:.8rem"><button class="primary" data-act="stsave">Save settings</button></div>';
+}
+
+// ---------- Market (like the Steam market; admins control prices and bots right here) ----------
+const CONDS = ['Mint Condition', 'Mint', 'Average', 'Bad', 'Terrible'], CCOL = ['#5ad28a', '#6fb7ff', '#f0b429', '#e0873b', '#e0463a'];
+let mkCfg = { fee: 0.05, wear_mult: { 'Mint Condition': 1.5, Mint: 1.2, Average: 1, Bad: 0.8, Terrible: 0.6 }, rarity: {} };
+let mkItemId = null, mkList = [], mkDays = 30, mkCondSel = '';
+const money = n => '$' + Number(n || 0).toFixed(2);
+async function mkRefreshBal() { const ses = await db.auth.getSession(); if (ses.data.session) loadProfile(ses.data.session.user.id); loadLoadouts(); }
+async function mkRender() {
+  const c = await db.rpc('market_config'); if (c.data) mkCfg = c.data;
+  if (view !== 'mk') return;
+  return mkItemId ? mkItemRender() : mkOverview();
+}
+async function mkOverview() {
+  const [ov, my] = await Promise.all([db.rpc('market_overview'), db.rpc('market_my_listings')]);
+  if (view !== 'mk' || mkItemId) return;
+  if (ov.error) { $('mkView').innerHTML = '<h2>Market</h2><p style="color:var(--mute)">' + esc(ov.error.message) + ' (run the SQL step)</p>'; return; }
+  mkList = ov.data || [];
+  const mine = my.data || [];
+  $('mkView').innerHTML = '<div class="row2" style="margin-bottom:.8rem"><h2>Market</h2>' + (devAdmin ? '<button data-mkset="1">Market settings</button>' : '') + '</div>' +
+    '<div class="btns" style="margin-bottom:.8rem"><input id="mkQ" placeholder="Search items" style="max-width:240px"><select id="mkSort" style="max-width:190px"><option value="name">Name</option><option value="low">Lowest price first</option><option value="high">Highest price first</option><option value="qty">Most for sale</option></select>' +
+    '<select id="mkRar" style="max-width:170px"><option value="">All rarities</option>' + RARITIES.map(r => '<option>' + r + '</option>').join('') + '</select></div>' +
+    (mine.length ? '<details style="margin-bottom:1rem"><summary style="cursor:pointer"><b>Your listings (' + mine.length + ')</b></summary>' + mine.map(m => '<div class="li"><div style="width:40px;text-align:center">' + itemImg(m.item, m.pattern_seed, 34, m.wear) + '</div><div><b>' + esc(m.item.name) + '</b><br><small>' + COND(Number(m.wear)) + ' · ' + money(m.price) + '</small></div><button data-cancel="' + m.id + '">Take back</button></div>').join('') + '</details>' : '') +
+    '<div class="grid" id="mkGrid" style="grid-template-columns:repeat(auto-fill,minmax(165px,1fr))"></div>';
+  mkGridDraw();
+}
+function mkGridDraw() {
+  const q = ($('mkQ').value || '').toLowerCase(), rar = $('mkRar').value, sort = $('mkSort').value;
+  const list = mkList.filter(i => (!q || String(i.name).toLowerCase().includes(q)) && (!rar || i.rarity === rar));
+  const lo = i => i.low == null ? 1e12 : Number(i.low);
+  list.sort((a, b) => sort === 'low' ? lo(a) - lo(b) : sort === 'high' ? (b.low == null ? -1 : Number(b.low)) - (a.low == null ? -1 : Number(a.low)) : sort === 'qty' ? b.qty - a.qty : String(a.name).localeCompare(b.name));
+  $('mkGrid').innerHTML = list.map(i => '<div class="card2" data-mk="' + i.id + '" style="cursor:pointer;' + (i.on_market ? '' : 'opacity:.5') + '"><div class="cin"><div class="cimg">' + itemImg(i, 1, 84, 0) + '</div><b>' + esc(i.name) +
+    '</b><small style="color:' + (RCOL[i.rarity] || '#fff') + ';display:block">' + esc(i.rarity) + '</small>' +
+    (i.on_market ? '<div style="margin-top:.3rem">' + (i.low != null ? 'From <b>' + money(i.low) + '</b>' : 'None for sale') + '</div><small style="color:var(--mute);display:block">' + i.qty + ' for sale · market ' + money(i.price) + '</small>' : '<small style="color:var(--gold);display:block;margin-top:.3rem">Not on the market yet</small>') +
+    '</div><div class="rbar" style="background:' + (RCOL[i.rarity] || RCOL.gray) + '"></div></div>').join('') || '<p style="color:var(--mute)">Nothing here yet.</p>';
+}
+function mkChart(series, sales) {
+  const W = 700, H = 300, L = 56, R = 12, T = 12, B = 70;
+  const pts = (series || []).filter(p => p[1] != null);
+  if (pts.length < 2) return '<p style="color:var(--mute)">No price history yet.</p>';
+  const t0 = pts[0][0], t1 = pts[pts.length - 1][0];
+  const lines = CONDS.map((c, i) => ({ c, col: CCOL[i], p: pts.map(([t, p]) => [t, p * (mkCfg.wear_mult[c] || 1)]) }));
+  let lo = Infinity, hi = 0; lines.forEach(l => l.p.forEach(([, p]) => { lo = Math.min(lo, p); hi = Math.max(hi, p); }));
+  const pad = (hi - lo) * 0.08 || hi * 0.1 || 1; lo = Math.max(0, lo - pad); hi += pad;
+  const x = t => L + (W - L - R) * (t - t0) / ((t1 - t0) || 1), y = p => T + (H - T - B) * (1 - (p - lo) / (hi - lo));
+  let g = '';
+  for (let i = 0; i <= 4; i++) { const v = lo + (hi - lo) * i / 4, yy = y(v); g += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + yy + '" y2="' + yy + '" stroke="#2a3b47"/><text x="' + (L - 6) + '" y="' + (yy + 4) + '" text-anchor="end" fill="#8da2b0" font-size="11">' + money(v) + '</text>'; }
+  [0, 0.5, 1].forEach(f => { const t = t0 + (t1 - t0) * f; g += '<text x="' + x(t) + '" y="' + (H - B + 16) + '" text-anchor="' + (f === 0 ? 'start' : f === 1 ? 'end' : 'middle') + '" fill="#8da2b0" font-size="11">' + new Date(t).toLocaleDateString() + '</text>'; });
+  const days = {}; (sales || []).forEach(s => { days[s.day] = (days[s.day] || 0) + s.n; });
+  const mx = Math.max(1, ...Object.values(days)), bw = Math.max(2, (W - L - R) / Math.max(1, mkDays) * 0.7);
+  Object.entries(days).forEach(([d, n]) => { const h = 38 * n / mx; g += '<rect x="' + (x(Number(d)) - bw / 2) + '" y="' + (H - 12 - h) + '" width="' + bw + '" height="' + h + '" fill="#5d7383"><title>' + n + ' sold</title></rect>'; });
+  g += '<text x="' + L + '" y="' + (H - 2) + '" fill="#8da2b0" font-size="10">sold per day</text>';
+  lines.forEach(l => { g += '<polyline fill="none" stroke="' + l.col + '" stroke-width="1.6" points="' + l.p.map(([t, p]) => x(t).toFixed(1) + ',' + y(p).toFixed(1)).join(' ') + '"/>'; });
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;background:#0d1a23;border:1px solid var(--line);border-radius:8px">' + g + '</svg>' +
+    '<div style="display:flex;gap:.9rem;flex-wrap:wrap;margin-top:.4rem;font-size:.8rem">' + CONDS.map((c, i) => '<span><span style="color:' + CCOL[i] + '">●</span> ' + c + '</span>').join('') + '</div>';
+}
+async function mkItemRender() {
+  const id = mkItemId;
+  const [v, h] = await Promise.all([db.rpc('market_item_view', { p_item: id }), db.rpc('market_history', { p_item: id, p_days: mkDays })]);
+  if (view !== 'mk' || mkItemId !== id) return;
+  if (v.error) { showErr(v.error.message); mkItemId = null; return mkOverview(); }
+  const d = v.data, it = d.item, ls = d.listings || [], sold = d.sold || {}, fee = mkCfg.fee;
+  const tbl = CONDS.map((c, i) => { const l = ls.filter(x => COND(Number(x.wear)) === c), lo = l.length ? Math.min(...l.map(x => Number(x.price))) : null, st = sold[c] || {};
+    return '<tr><td><span style="color:' + CCOL[i] + '">●</span> ' + c + '</td><td>×' + (mkCfg.wear_mult[c] || 1) + '</td><td>' + (lo != null ? money(lo) : '-') + '</td><td>' + l.length + '</td><td>' + (st.d1 || 0) + '</td><td>' + (st.d7 || 0) + '</td><td>' + (st.d30 || 0) + '</td></tr>'; }).join('');
+  const shown = ls.filter(x => !mkCondSel || COND(Number(x.wear)) === mkCondSel);
+  const listings = shown.map(x => '<tr data-linspect="' + x.id + '" style="cursor:pointer"><td>' + COND(Number(x.wear)) + '</td><td>' + Number(x.wear).toFixed(6) + '</td><td>' + (it.is_pattern_based ? '#' + (x.seed || 1) : '-') + '</td><td><b>' + money(x.price) + '</b></td><td>' +
+    (x.mine ? '<button data-cancel="' + x.id + '">Take back</button>' : '<button class="primary" data-buy="' + x.id + '" data-price="' + x.price + '">Buy</button>') + '</td></tr>').join('');
+  const mine = (d.mine || []).map(m => '<div class="li"><div style="width:44px;text-align:center">' + itemImg(it, m.seed, 38, m.wear) + '</div><div style="flex:1"><b>' + COND(Number(m.wear)) + '</b> <small>' + Number(m.wear).toFixed(6) + (it.is_pattern_based ? ' · #' + (m.seed || 1) : '') + '</small><br><small style="color:var(--mute)">Fair price ' + money(m.fair) + '</small></div>' +
+    (m.instant != null ? '<button data-sellnow="' + m.inventory_id + '">Sell now ' + money(m.instant) + '</button>' : '') + '<input id="mkp_' + m.inventory_id + '" type="number" min="0.03" step="0.01" value="' + Number(m.fair).toFixed(2) + '" style="width:92px"><button class="primary" data-list="' + m.inventory_id + '">List</button></div>').join('');
+  let adm = '';
+  if (d.admin) {
+    const a = d.admin, mi = a.market || {}, tr = a.trend || {};
+    adm = '<details class="mkadm" open><summary style="cursor:pointer;color:var(--gold)"><b>Admin: price, bots and pattern prices</b></summary>' +
+      '<div style="color:var(--mute);font-size:.85rem;margin-top:.4rem">Bots are ' + (a.bots_active ? '<b style="color:#5ad28a">active</b>' : '<b style="color:var(--danger)">stopped</b>') + ' for this item · real player sales in the last 7 days: ' + a.real_sales_7d + ' · bot listings now: ' + a.bot_listings + '</div>' +
+      '<label><input id="mk_en" type="checkbox" style="width:auto"' + (mi.enabled === false ? '' : ' checked') + '> On the market</label>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.6rem"><div><label>Price right now ($)</label><input id="mk_cur" type="number" min="0.01" step="0.01" value="' + Number(d.price || 5).toFixed(2) + '"></div>' +
+      '<div><label>Price it should reach ($)</label><input id="mk_tgt" type="number" min="0.01" step="0.01" value="' + Number(tr.target_price || d.price || 5).toFixed(2) + '"></div>' +
+      '<div><label>...in this many days</label><input id="mk_days" type="number" min="0.1" step="0.5" value="14"></div><div><label>Ups and downs (0 to 3)</label><input id="mk_vol" type="number" min="0" max="3" step="0.1" value="' + (tr.volatility == null ? 1 : tr.volatility) + '"></div></div>' +
+      '<p style="color:var(--mute);font-size:.8rem;margin:.4rem 0 0">The price drifts toward the target with random spikes, dips, flat days and steady days. The price above is for Average wear; other wears and patterns scale from it.</p>' +
+      '<div class="btns" style="margin-top:.6rem"><button class="primary" data-mkadm="plan">Apply price plan</button></div>' +
+      '<hr style="border-color:var(--line);margin:.9rem 0"><b>Bots</b><label><input id="mk_bots" type="checkbox" style="width:auto"' + (mi.bots_enabled === false ? '' : ' checked') + '> Bots buy and sell this item</label>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.6rem"><div><label>Bot listings to keep in stock</label><input id="mk_stock" type="number" min="0" step="1" value="' + (mi.bot_stock == null ? 10 : mi.bot_stock) + '"></div>' +
+      '<div><label>Stop bots after this many real sales in 7 days (blank = rarity default)</label><input id="mk_liq" type="number" min="0" step="1" value="' + (mi.liq_stop == null ? '' : mi.liq_stop) + '"></div>' +
+      '<div><label>Bots buy at (% of fair price)</label><input id="mk_buy" type="number" min="1" max="150" step="1" value="' + Math.round((mi.buy_factor == null ? 0.88 : mi.buy_factor) * 100) + '"></div>' +
+      '<div><label>Bots sell at (% of fair price)</label><input id="mk_markup" type="number" min="50" max="300" step="1" value="' + Math.round((mi.sell_markup == null ? 1.04 : mi.sell_markup) * 100) + '"></div></div>' +
+      '<div class="btns" style="margin-top:.6rem"><button data-mkadm="bots">Save bot settings</button></div>' +
+      '<hr style="border-color:var(--line);margin:.9rem 0"><b>Pattern overpay</b><p style="color:var(--mute);font-size:.8rem;margin:.2rem 0">Special pattern numbers sell for more. A range of pattern numbers gets a price multiplier.</p>' +
+      ((a.overpay || []).map(o => '<div class="li"><div><b>#' + o.seed_from + (o.seed_to !== o.seed_from ? ' to #' + o.seed_to : '') + '</b> × ' + o.multiplier + '<br><small>' + esc(o.note) + '</small></div><button data-mkadm="opdel" data-id="' + o.id + '">Remove</button></div>').join('') || '<div style="color:var(--mute);font-size:.85rem">none yet</div>') +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.6rem"><div><label>Pattern from</label><input id="mk_pf" type="number" min="1" max="999" value="100"></div><div><label>to</label><input id="mk_pt" type="number" min="1" max="999" value="100"></div><div><label>Price multiplier</label><input id="mk_pm" type="number" min="0.1" step="0.1" value="3"></div><div><label>Note</label><input id="mk_pn" placeholder="e.g. fade seed"></div></div>' +
+      '<div class="btns" style="margin-top:.6rem"><button data-mkadm="opadd">Add pattern price</button></div></details>';
+  }
+  $('mkView').innerHTML = '<div class="btns"><button data-mkback="1">← All items</button></div>' +
+    '<div class="op" style="margin-top:.6rem"><div class="row2"><div style="display:flex;gap:1rem;align-items:center"><div style="width:96px;text-align:center">' + itemImg(it, 1, 90, 0.2) + '</div><div><h2 style="color:' + (RCOL[it.rarity] || '#fff') + '">' + esc(it.name) + '</h2><div style="color:var(--mute)">' + esc(it.rarity) + (it.kind ? ' · ' + esc(it.kind) : '') + '</div><div style="color:var(--mute);font-size:.85rem">' + esc(it.description || '') + '</div></div></div>' +
+    '<div style="text-align:right"><div style="color:var(--mute);font-size:.85rem">Market price (Average wear)</div><div style="font-size:1.8rem;color:var(--gold);font-weight:700">' + (d.price != null ? money(d.price) : '-') + '</div></div></div></div>' + adm +
+    '<div class="op"><div class="row2"><b>Price history</b><span class="btns">' + [7, 30, 90].map(n => '<button data-days="' + n + '" class="' + (n === mkDays ? 'primary' : '') + '">' + n + ' days</button>').join('') + '</span></div><div style="margin-top:.6rem">' + mkChart((h.data || {}).series, (h.data || {}).sales) + '</div>' +
+    '<table class="mktbl" style="margin-top:.8rem"><tr><th>Condition</th><th>Price</th><th>Lowest</th><th>Listed</th><th>Sold 24h</th><th>7 days</th><th>30 days</th></tr>' + tbl + '</table></div>' +
+    (mine ? '<div class="op"><b>Your copies</b><p style="color:var(--mute);font-size:.85rem;margin:.2rem 0 .5rem">You keep ' + Math.round((1 - fee) * 1000) / 10 + '% of the price you list at (a ' + Math.round(fee * 1000) / 10 + '% fee). Selling now takes the best offer immediately.</p>' + mine + '</div>' : '') +
+    '<div class="op"><div class="row2"><b>For sale (' + ls.length + ')</b><select id="mkCondSel" style="max-width:190px"><option value="">All conditions</option>' + CONDS.map(c => '<option' + (c === mkCondSel ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></div>' +
+    '<table class="mktbl" style="margin-top:.5rem"><tr><th>Condition</th><th>Wear</th><th>Pattern</th><th>Price</th><th></th></tr>' + (listings || '<tr><td colspan="5" style="color:var(--mute)">Nothing for sale right now.</td></tr>') + '</table><small style="color:var(--mute)">Click a row to inspect that exact item.</small></div>';
+  window.mkLs = ls; window.mkIt = it;
+}
+$('mkView').addEventListener('input', e => { if (e.target.id === 'mkQ' || e.target.id === 'mkSort' || e.target.id === 'mkRar') mkGridDraw(); });
+$('mkView').addEventListener('change', e => { if (e.target.id === 'mkCondSel') { mkCondSel = e.target.value; mkItemRender(); } });
+$('mkView').addEventListener('click', async e => {
+  const t = e.target;
+  const open = t.closest('[data-mk]'); if (open) { mkItemId = open.dataset.mk; mkCondSel = ''; return mkRender(); }
+  if (t.closest('[data-mkback]')) { mkItemId = null; return mkRender(); }
+  const dy = t.closest('[data-days]'); if (dy) { mkDays = Number(dy.dataset.days); return mkItemRender(); }
+  if (t.closest('[data-mkset]')) return mkSettings();
+  const buy = t.closest('[data-buy]');
+  if (buy) {
+    buy.disabled = true;
+    const { data, error } = await db.rpc('market_buy', { p_listing: buy.dataset.buy, p_price: Number(buy.dataset.price) });
+    if (error) { showErr(error.message); return mkItemRender(); }
+    playSound('purchase'); mkRefreshBal();
+    const bi = window.mkIt; inspect(bi, Number(data.wear), data.pattern_seed, 'You bought:'); return mkItemRender();
+  }
+  const cn = t.closest('[data-cancel]');
+  if (cn) { const { error } = await db.rpc('market_cancel', { p_listing: cn.dataset.cancel }); if (error) showErr(error.message); mkRefreshBal(); return mkRender(); }
+  const sn = t.closest('[data-sellnow]');
+  if (sn) { sn.disabled = true; const { data, error } = await db.rpc('market_sell_now', { p_inv: sn.dataset.sellnow }); if (error) showErr(error.message); else playSound('purchase'); mkRefreshBal(); return mkItemRender(); }
+  const ls = t.closest('[data-list]');
+  if (ls) {
+    const price = Number($('mkp_' + ls.dataset.list).value);
+    ls.disabled = true; const { error } = await db.rpc('market_list', { p_inv: ls.dataset.list, p_price: price }); if (error) showErr(error.message);
+    mkRefreshBal(); return mkItemRender();
+  }
+  const row = t.closest('[data-linspect]');
+  if (row && !t.closest('button')) { const l = (window.mkLs || []).find(x => x.id === row.dataset.linspect); if (l) inspect(window.mkIt, Number(l.wear), l.seed, null); return; }
+  const ad = t.closest('[data-mkadm]');
+  if (ad) {
+    const a = ad.dataset.mkadm, id = mkItemId;
+    try {
+      if (a === 'plan') {
+        const cur = Number($('mk_cur').value), tgt = Number($('mk_tgt').value), days = Number($('mk_days').value), vol = Number($('mk_vol').value);
+        if (!(cur > 0 && tgt > 0 && days > 0)) throw new Error('Enter a price, a target price and a number of days.');
+        const r1 = await db.from('market_items').upsert({ item_id: id, enabled: $('mk_en').checked }, { onConflict: 'item_id' }); if (r1.error) throw r1.error;
+        const r2 = await db.from('market_trends').insert({ item_id: id, start_at: new Date().toISOString(), end_at: new Date(Date.now() + days * 864e5).toISOString(), base_price: cur, target_price: tgt, volatility: Math.max(0, vol || 0) }); if (r2.error) throw r2.error;
+      } else if (a === 'bots') {
+        const lq = $('mk_liq').value;
+        const r = await db.from('market_items').upsert({ item_id: id, bots_enabled: $('mk_bots').checked, bot_stock: Math.max(0, Number($('mk_stock').value) || 0), liq_stop: lq === '' ? null : Math.max(0, Number(lq)), buy_factor: (Number($('mk_buy').value) || 88) / 100, sell_markup: (Number($('mk_markup').value) || 104) / 100 }, { onConflict: 'item_id' }); if (r.error) throw r.error;
+      } else if (a === 'opadd') {
+        const f = Number($('mk_pf').value), to = Number($('mk_pt').value), m = Number($('mk_pm').value);
+        if (!(f >= 1 && to >= f && m > 0)) throw new Error('Check the pattern numbers and the multiplier.');
+        const r = await db.from('market_pattern_overpay').insert({ item_id: id, seed_from: f, seed_to: to, multiplier: m, note: $('mk_pn').value.trim() }); if (r.error) throw r.error;
+      } else if (a === 'opdel') { const r = await db.from('market_pattern_overpay').delete().eq('id', ad.dataset.id); if (r.error) throw r.error; }
+    } catch (err) { showErr(err.message); return; }
+    return mkItemRender();
+  }
+});
+function mkSettings() {   // admin: fee, wear price multipliers, and which rarities the bots may trade
+  const rc = mkCfg.rarity || {};
+  $('inspBox').innerHTML = '<h2 style="margin-bottom:.4rem">Market settings</h2><div style="text-align:left;max-height:62vh;overflow:auto"><label style="display:block;color:var(--mute);font-size:.85rem">Fee on sales (%)</label><input id="mc_fee" type="number" min="0" max="50" step="0.5" value="' + Math.round(mkCfg.fee * 1000) / 10 + '">' +
+    '<b style="display:block;margin-top:.8rem">Price multiplier by wear</b>' + CONDS.map((c, i) => '<label style="display:block;color:var(--mute);font-size:.85rem"><span style="color:' + CCOL[i] + '">●</span> ' + c + '</label><input id="mc_w' + i + '" type="number" min="0.05" step="0.05" value="' + (mkCfg.wear_mult[c] || 1) + '">').join('') +
+    '<b style="display:block;margin-top:.8rem">Bots by rarity</b><p style="color:var(--mute);font-size:.8rem;margin:.2rem 0">Untick a rarity to keep bots out of it completely. The number is how many real player sales in 7 days make bots stop (0 = never stop). Each item can override it.</p>' +
+    RARITIES.map(r => '<div style="display:flex;gap:.6rem;align-items:center;margin-top:.3rem"><label style="display:flex;gap:.4rem;align-items:center;width:120px;margin:0"><input type="checkbox" id="mr_b_' + r.replace(' ', '_') + '" style="width:auto"' + ((rc[r] || {}).bots === false ? '' : ' checked') + '>' + r + '</label><input id="mr_l_' + r.replace(' ', '_') + '" type="number" min="0" step="1" value="' + ((rc[r] || {}).liq || 0) + '" style="width:100px"></div>').join('') +
+    '</div><div class="btns" style="margin-top:1rem"><button class="primary" id="mcSave">Save</button><button id="inspClose">Cancel</button></div>';
+  $('insp').classList.remove('hidden'); $('inspClose').onclick = () => $('insp').classList.add('hidden');
+  $('mcSave').onclick = async () => {
+    const wm = {}; CONDS.forEach((c, i) => { wm[c] = Number($('mc_w' + i).value) || 1; });
+    const ra = {}; RARITIES.forEach(r => { const k = r.replace(' ', '_'); ra[r] = { bots: $('mr_b_' + k).checked, liq: Math.max(0, Number($('mr_l_' + k).value) || 0) }; });
+    const { error } = await db.rpc('market_set_config', { p_cfg: { fee: (Number($('mc_fee').value) || 0) / 100, wear_mult: wm, rarity: ra } });
+    if (error) return showErr(error.message);
+    $('insp').classList.add('hidden'); mkRender();
+  };
 }
 </script>
 </body>
