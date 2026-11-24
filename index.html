@@ -320,7 +320,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
 <div id="roll" class="hidden"><div class="rbox"><h2 style="margin-bottom:.8rem">Opening case...</h2><div class="rview"><div id="rstrip"></div><div class="rmark"></div></div><button id="rskip">Skip</button></div></div>
 <div id="insp" class="hidden"><div class="box" id="inspBox"></div></div>
 <div id="dev" class="hidden"><div class="panel">
-  <div class="dh"><b>Dev tools</b><span class="btns"><button id="dvTabItems">Items</button><button id="dvTabColls">Collections</button><button id="dvTabCases">Cases</button><button id="dvTabOps">Operations</button><button id="dvTabShop">Shop keys</button><button id="dvTabShopC">Shop cases</button><button id="dvTabMoney">Money</button><button id="dvTabNews">News</button><button id="dvTabPuz">Puzzles</button><button id="dvTabWk">Weekly drops</button><button id="dvTabMed">Year flairs</button><button id="dvTabSnd">Sound kits</button><button id="dvTabSet">Settings</button><button id="dvClose">Close</button></span></div>
+  <div class="dh"><b>Dev tools</b><span class="btns"><button id="dvTabItems">Items (pieces & sets)</button><button id="dvTabBoards">Boards</button><button id="dvTabFlairs">Flairs</button><button id="dvTabNfx">Name effects</button><button id="dvTabOther">Other items</button><button id="dvTabColls">Collections</button><button id="dvTabCases">Cases</button><button id="dvTabOps">Operations</button><button id="dvTabShop">Shop keys</button><button id="dvTabShopC">Shop cases</button><button id="dvTabMoney">Money</button><button id="dvTabNews">News</button><button id="dvTabPuz">Puzzles</button><button id="dvTabWk">Weekly drops</button><button id="dvTabMed">Year flairs</button><button id="dvTabSnd">Sound kits</button><button id="dvTabSet">Settings</button><button id="dvTabStore">Storage containers</button><button id="dvClose">Close</button></span></div>
   <div id="devBody"></div><div id="devMsg"></div>
 </div></div>
 <script src="https://cdn.jsdelivr.net/npm/fzstd@0.1.1/umd/index.js"></script>
@@ -968,11 +968,20 @@ const KINDS = ['piece', 'set', 'charm', 'board', 'clock skin', 'username effect'
 const SOUND_EVENTS = [['move', 'Piece move'], ['capture', 'Capture'], ['castle', 'Castling'], ['check', 'Check'], ['promote', 'Promotion'], ['checkmate', 'Checkmate'], ['game_start', 'Game start'], ['win', 'You win'], ['loss', 'You lose'], ['draw', 'Draw'], ['low_time', 'Under 10 seconds'], ['puzzle_correct', 'Puzzle solved'], ['puzzle_wrong', 'Puzzle failed'], ['case_tick', 'Case roll tick'], ['case_reveal', 'Case reveal'], ['level_up', 'Level up'], ['purchase', 'Purchase'], ['claim', 'Claim a drop']];
 const RARITIES = ['gray', 'light blue', 'blue', 'purple', 'pink', 'red', 'gold'];
 const PIECES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'];
+const OTHER_KINDS = ['clock skin', 'win effect', 'loss effect', 'checkmate effect', 'draw effect', 'charm'];
+const KNOWN_KINDS = ['piece', 'set', 'board', 'flair', 'username effect', 'sound kit'];
+const ITEM_TABS = ['items', 'boards', 'flairs', 'nameeffects', 'otheritems'];
+const TAB_KIND = { boards: 'board', flairs: 'flair', nameeffects: 'username effect' };
+const isItemTab = t => ITEM_TABS.includes(t);
+const tbl = () => isItemTab(devTab) ? 'items' : devTab;
+const tabMatches = r => devTab === 'items' ? ['piece', 'set'].includes(r.kind) : devTab === 'boards' ? r.kind === 'board' : devTab === 'flairs' ? r.kind === 'flair' : devTab === 'nameeffects' ? r.kind === 'username effect' : devTab === 'otheritems' ? !KNOWN_KINDS.includes(r.kind) : true;
+const EMOJIS = Array.from('😀😁😂🤣😃😄😅😆😉😊😋😎😍😘🥰😗🙂🤗🤩🤔🤨😐🙄😏😮🤐😯😪😴😌😛😜😝🤑😲😖😞😤😢😭😨😩🤯😬😱🥵🥶😳🤪😵😡😠🤬😷🤒🤕🤢🤮😇🤠🤡🥳🥴🥺🤥🤫🤭🧐🤓😈👿👹👺💀👻👽🤖💩😺😸😹😻😼😽🙀🔥💯💎👑🏆🥇🥈🥉🎯🎮🎲♟🧠⚡🌟🚀🌈🌙🍀🌸🌹💥🎉🎊🎁🎈🎵🎶🐉🦁🐯🐺🦊🐻🐼🐸🐵🦄🐲🦅🦉🐍🦈🐙🍕🍔🍟🍩🍪🍉🍓🍎⚽🏀🏈🎸🥁📚💡🔔🔑💰💣🗡🛡⭐');
 const FX = ['none', 'color change', 'size change', 'brightness', 'pattern sheet'];
 const F = {
-  items: [['name', 'text'], ['description', 'area'], ['kind', 'sel', KINDS], ['piece', 'sel', PIECES], ['rarity', 'sel', RARITIES], ['side', 'sel', ['both', 'white', 'black']],
-          ['wear_range', 'range'], ['brightness', 'bright'], ['is_pattern_based', 'chk'], ['pattern_effect', 'pcfg', FX], ['scratch_black', 'pscr'], ['allow_charms', 'pcharm'], ['board_light', 'pcol'], ['board_dark', 'pcol'], ['name_fx', 'psel', ['none', 'glow', 'pulse', 'rainbow', 'shimmer']], ['name_color', 'pcol'], ['pattern_sheet', 'patsheet'], ['sheet_mode', 'psmode'], ['is_default', 'chk'], ['collections', 'colls'], ['image_url', 'img'], ['set_images', 'setimgs']],
-  collections: [['name', 'text'], ['description', 'area'], ['is_active_drop', 'chk'], ['image_url', 'img']],
+  items: [['name', 'text'], ['description', 'area'], ['kind', 'sel', ['piece', 'set']], ['piece', 'sel', PIECES], ['rarity', 'sel', RARITIES], ['side', 'sel', ['both', 'white', 'black']],
+          ['wear_range', 'range'], ['brightness', 'bright'], ['is_pattern_based', 'chk'], ['pattern_effect', 'pcfg', FX], ['scratch_black', 'pscr'], ['pattern_sheet', 'patsheet'], ['sheet_mode', 'psmode'], ['allow_charms', 'pcharm'],
+          ['is_default', 'chk'], ['tradable', 'chk'], ['collections', 'colls'], ['image_url', 'img'], ['set_images', 'setimgs']],
+  collections: [['name', 'text'], ['description', 'area'], ['coll_kind', 'sel', ['items', 'flairs']], ['is_active_drop', 'chk'], ['image_url', 'img']],
   cases: [['name', 'text'], ['description', 'area'], ['collection_id', 'coll'], ['allow_gold', 'chk'], ['image_url', 'img'], ['key_image_url', 'img']],
   operations: [['name', 'text'], ['description', 'area'], ['currency_piece', 'sel', PIECES], ['lasts_days', 'dur'], ['pass_price', 'money'], ['max_level', 'int'], ['xp_per_level', 'int'], ['image_url', 'img']],
   operation_quests: [['name', 'text'], ['period', 'sel', ['daily', 'weekly', 'monthly', 'operation']], ['kind', 'sel', ['win games', 'promote pawns', 'capture pieces', 'give checkmate', 'play games', 'puzzles completed', 'puzzles solved', 'custom']], ['description', 'area'], ['goal', 'int'], ['reward_xp', 'int'], ['reward_pawns', 'int'], ['reward_item_id', 'item'], ['reward_case_id', 'case']],
@@ -980,13 +989,18 @@ const F = {
   operation_level_rewards: [['level', 'int'], ['reward_pawns', 'int'], ['reward_item_id', 'item'], ['reward_case_id', 'case']],
   shop_keys: [['case_id', 'case'], ['price', 'money']],
   shop_cases: [['case_id', 'case'], ['price', 'money']],
-  news: [['title', 'text'], ['body', 'area'], ['image_url', 'img']]
+  news: [['title', 'text'], ['body', 'area'], ['image_url', 'img']],
+  boards: [['name', 'text'], ['description', 'area'], ['rarity', 'sel', RARITIES], ['side', 'sel', ['both', 'white', 'black']], ['board_light', 'pcol'], ['board_dark', 'pcol'], ['tradable', 'chk'], ['collections', 'colls'], ['image_url', 'img']],
+  flairs: [['name', 'text'], ['description', 'area'], ['rarity', 'sel', RARITIES], ['emoji', 'emoji'], ['tradable', 'chk'], ['collections', 'colls'], ['image_url', 'img']],
+  nameeffects: [['name', 'text'], ['description', 'area'], ['rarity', 'sel', RARITIES], ['name_fx', 'psel', ['none', 'glow', 'pulse', 'rainbow', 'shimmer']], ['name_color', 'pcol'], ['tradable', 'chk'], ['collections', 'colls'], ['image_url', 'img']],
+  otheritems: [['name', 'text'], ['description', 'area'], ['kind', 'sel', OTHER_KINDS], ['rarity', 'sel', RARITIES], ['side', 'sel', ['both', 'white', 'black']], ['tradable', 'chk'], ['collections', 'colls'], ['image_url', 'img']],
+  storage_defs: [['name', 'text'], ['description', 'area'], ['price', 'money'], ['capacity', 'int'], ['image_url', 'img']]
 };
-const TITLE = { items: 'item', collections: 'collection / case', operations: 'operation', shop_keys: 'shop key', cases: 'case', shop_cases: 'case for sale', news: 'news post (shown once to every player)' };
+const TITLE = { items: 'item', collections: 'collection / case', operations: 'operation', shop_keys: 'shop key', cases: 'case', shop_cases: 'case for sale', news: 'news post (shown once to every player)', boards: 'board', flairs: 'flair', nameeffects: 'name effect', otheritems: 'item', storage_defs: 'storage container' };
 const rowName = r => r.name || r.title || (r.case_id ? nameOf(devCases, r.case_id) + (devTab === 'shop_keys' ? ' key' : '') : '');
 let devOpen = false, devTab = 'items', devEdit = null, devRows = [], devItems = [], devColls = [], devCases = [], devIC = {};
 const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const LABELS = { reward_pawns: 'reward currency', cost_pawns: 'price (operation currency)', reward_xp: 'reward XP', xp_per_level: 'XP needed per level', max_level: 'number of levels', pass_price: 'pass price from the player balance (0 = free)', period: 'resets', level: 'reward at level', lasts_days: 'lasts (days from now)' };
+const LABELS = { reward_pawns: 'reward currency', cost_pawns: 'price (operation currency)', reward_xp: 'reward XP', xp_per_level: 'XP needed per level', max_level: 'number of levels', pass_price: 'pass price from the player balance (0 = free)', period: 'resets', level: 'reward at level', lasts_days: 'lasts (days from now)', tradable: 'can be traded on the market', coll_kind: 'this collection holds', capacity: 'how many items it holds' };
 const lab = k => LABELS[k] || k.replace(/_id$/, '').replace(/_/g, ' ');
 const devMsg = (t, bad) => { $('devMsg').style.color = bad ? 'var(--danger)' : 'var(--gold)'; $('devMsg').textContent = t || ''; };
 function devErr(err) {
@@ -1019,10 +1033,16 @@ function formHtml(fields, cur, pfx) {
   let f = '';
   for (const [k, type, opts] of fields) {
     const v = type === 'pcfg' ? (cur.pattern_config || {}).effect : type === 'pscr' ? (cur.pattern_config || {}).scratch_black : type === 'patsheet' ? (cur.pattern_config || {}).sheet_url : type === 'psmode' ? (cur.pattern_config || {}).sheet_mode : type === 'pcharm' ? (cur.pattern_config || {}).allow_charms : (type === 'pcol' || type === 'psel') ? (cur.pattern_config || {})[k] : cur[k], id = pfx + k, ida = ' id="' + id + '"';
-    if (type === 'chk') { f += '<label><input' + ida + ' type="checkbox"' + (v ? ' checked' : '') + '>' + lab(k) + '</label>'; continue; }
+    if (type === 'chk') { f += '<label><input' + ida + ' type="checkbox"' + ((v == null ? k === 'tradable' : v) ? ' checked' : '') + '>' + lab(k) + '</label>'; continue; }
+    if (type === 'emoji') {
+      const ev = (cur.pattern_config || {}).emoji || '';
+      f += '<label for="dv_emoji">emoji flair (pick one, or leave empty and upload an image instead)</label><input id="dv_emoji" value="' + esc(ev) + '" maxlength="8" style="font-size:1.6rem;width:110px;text-align:center"><div style="display:flex;flex-wrap:wrap;gap:.1rem;max-height:150px;overflow:auto;margin-top:.4rem;background:#0d1a23;padding:.4rem;border-radius:6px">' +
+        EMOJIS.map(e => '<button type="button" data-emoji="' + e + '" style="font-size:1.3rem;padding:.1rem .3rem;background:transparent;border:0;width:auto">' + e + '</button>').join('') + '</div>';
+      continue;
+    }
     if (type === 'colls') {
       const mine = devIC[cur.id] || (cur.collection_id ? [cur.collection_id] : []);
-      f += '<label>collections (tick more than one and the item has no single collection)</label>' + devColls.map(c => '<label style="display:flex;gap:.5rem;align-items:center;text-transform:none;margin-top:.15rem"><input type="checkbox" class="dv_colls" value="' + c.id + '"' + (mine.includes(c.id) ? ' checked' : '') + ' style="width:auto"> ' + esc(c.name) + '</label>').join('');
+      f += '<label>collections (tick more than one and the item has no single collection)</label>' + devColls.filter(c => devTab === 'flairs' ? c.coll_kind === 'flairs' : c.coll_kind !== 'flairs').map(c => '<label style="display:flex;gap:.5rem;align-items:center;text-transform:none;margin-top:.15rem"><input type="checkbox" class="dv_colls" value="' + c.id + '"' + (mine.includes(c.id) ? ' checked' : '') + ' style="width:auto"> ' + esc(c.name) + '</label>').join('');
       continue;
     }
     if (type === 'sndkit') {
@@ -1069,7 +1089,7 @@ function formHtml(fields, cur, pfx) {
     else if (type === 'num') f += '<input' + ida + ' type="number" min="0" max="1" step="0.01" value="' + (v == null ? 1 : v) + '">';
     else if (type === 'dur') f += '<input' + ida + ' type="number" min="0" step="0.1" value="' + (cur.id ? 0 : 7) + '">' + (cur.ends_at ? '<small style="color:var(--mute)">Currently ends ' + esc(new Date(cur.ends_at).toLocaleString()) + '. 0 keeps it.</small>' : '');
     else if (type === 'money') f += '<input' + ida + ' type="number" min="0" step="0.01" value="' + (v == null ? (k === 'pass_price' ? 0 : 5) : v) + '">';
-    else if (type === 'int') f += '<input' + ida + ' type="number" min="0" step="1" value="' + (v == null ? ({ goal: 1, max_level: 10, xp_per_level: 100, level: 1 }[k] ?? 0) : v) + '">';
+    else if (type === 'int') f += '<input' + ida + ' type="number" min="0" step="1" value="' + (v == null ? ({ goal: 1, max_level: 10, xp_per_level: 100, level: 1, capacity: 100 }[k] ?? 0) : v) + '">';
     else if (type === 'img') f += '<div class="drop" data-for="' + id + '">' + (v ? 'Image set. Drop a new one to replace it.' : 'Drop an image here, or click') + '</div><input' + ida + ' type="file" accept="image/*" hidden>' +
       (v ? '<img src="' + esc(v) + '" alt="" style="height:48px;margin-top:.4rem">' : '');
     else {
@@ -1111,6 +1131,7 @@ async function collect(fields, cur, pfx) {
     if (type === 'chk') row[k] = el.checked;
     else if (type === 'num') row[k] = Math.min(1, Math.max(0, el.value === '' ? 1 : Number(el.value)));
     else if (type === 'dur') row[k] = Math.max(0, Number(el.value) || 0);
+    else if (type === 'emoji') row.pattern_config = Object.assign({}, row.pattern_config, { emoji: el.value.trim() });
     else if (type === 'colls') row._colls = [...document.querySelectorAll('.dv_colls:checked')].map(x => x.value);
     else if (type === 'sndkit') {
       const o = Object.assign({}, (cur.pattern_config || {}).sounds || {});
@@ -1131,7 +1152,7 @@ async function collect(fields, cur, pfx) {
       row.set_images = o;
     }
     else if (type === 'money') row[k] = Math.max(0, Number(el.value) || 0);
-    else if (type === 'int') row[k] = Math.max(['goal', 'max_level', 'xp_per_level', 'level'].includes(k) ? 1 : 0, Math.floor(Number(el.value) || 0));
+    else if (type === 'int') row[k] = Math.max(['goal', 'max_level', 'xp_per_level', 'level', 'capacity'].includes(k) ? 1 : 0, Math.floor(Number(el.value) || 0));
     else if (type === 'coll' || type === 'item' || type === 'case') row[k] = el.value || null;
     else if (type === 'img') row[k] = el.files[0] ? await devUpload(el.files[0], devTab === 'items' && ($('dv_kind') || {}).value === 'piece') : (cur[k] || null);
     else row[k] = el.value.trim();
@@ -1156,7 +1177,7 @@ async function devMoney() {
 }
 async function devRender() {
   if (!devOpen) return;
-  for (const [id, t] of [['dvTabItems', 'items'], ['dvTabColls', 'collections'], ['dvTabOps', 'operations'], ['dvTabShop', 'shop_keys'], ['dvTabCases', 'cases'], ['dvTabShopC', 'shop_cases'], ['dvTabMoney', 'money'], ['dvTabNews', 'news'], ['dvTabPuz', 'puzzles'], ['dvTabWk', 'weekly'], ['dvTabMed', 'medals'], ['dvTabSnd', 'sounds'], ['dvTabSet', 'settings']]) $(id).className = devTab === t ? 'primary' : '';
+  for (const [id, t] of [['dvTabItems', 'items'], ['dvTabColls', 'collections'], ['dvTabOps', 'operations'], ['dvTabShop', 'shop_keys'], ['dvTabCases', 'cases'], ['dvTabShopC', 'shop_cases'], ['dvTabMoney', 'money'], ['dvTabNews', 'news'], ['dvTabPuz', 'puzzles'], ['dvTabWk', 'weekly'], ['dvTabMed', 'medals'], ['dvTabSnd', 'sounds'], ['dvTabSet', 'settings'], ['dvTabBoards', 'boards'], ['dvTabFlairs', 'flairs'], ['dvTabNfx', 'nameeffects'], ['dvTabOther', 'otheritems'], ['dvTabStore', 'storage_defs']]) $(id).className = devTab === t ? 'primary' : '';
   if (devTab === 'money') return devMoney();
   if (devTab === 'puzzles') return devPuzzles();
   if (devTab === 'weekly') return devWeekly();
@@ -1164,10 +1185,10 @@ async function devRender() {
   if (devTab === 'sounds') return devSounds();
   if (devTab === 'settings') return devSettings();
   const [ci, ii, rr, ca, icq] = await Promise.all([db.from('collections').select('*').order('created_at'), db.from('items').select('*').order('created_at'),
-                                          db.from(devTab).select('*').order('created_at', { ascending: false }), db.from('cases').select('*').order('created_at'), db.from('item_collections').select('*')]);
+                                          db.from(tbl()).select('*').order('created_at', { ascending: false }), db.from('cases').select('*').order('created_at'), db.from('item_collections').select('*')]);
   const bad = ci.error || ii.error || rr.error || ca.error;
   if (bad) devErr(bad); else devMsg('');
-  devCases = ca.data || []; devColls = ci.data || []; devIC = {}; (icq.data || []).forEach(x => { (devIC[x.item_id] = devIC[x.item_id] || []).push(x.collection_id); }); devItems = ii.data || []; devRows = (rr.data || []).filter(r => !(devTab === 'items' && r.kind === 'sound kit'));
+  devCases = ca.data || []; devColls = ci.data || []; devIC = {}; (icq.data || []).forEach(x => { (devIC[x.item_id] = devIC[x.item_id] || []).push(x.collection_id); }); devItems = ii.data || []; devRows = (rr.data || []).filter(r => !isItemTab(devTab) || tabMatches(r));
   const cur = devEdit || {};
   let h = '<b>' + (devEdit ? 'Editing: ' + esc(rowName(cur)) : 'New ' + TITLE[devTab]) + '</b>' + formHtml(F[devTab], cur, 'dv_') +
     '<div class="btns" style="margin-top:.8rem"><button class="primary" data-act="save">' + (devEdit ? 'Save changes' : 'Create') + '</button>' + (devEdit ? '<button data-act="cancel">Close editor</button>' : '') + '</div>';
@@ -1197,11 +1218,12 @@ async function devRender() {
       '<div style="margin-top:.8rem"><b>Add a tile</b>' + formHtml(F.operation_shop, {}, 'sh_') + '<div class="btns" style="margin-top:.6rem"><button class="primary" data-act="adds">Add to shop</button></div></div></div>';
   } else if (devTab === 'operations') h += '<p style="color:var(--mute)">Create the operation first, then its quests, level rewards and shop appear here.</p>';
   h += '<hr style="border-color:var(--line);margin:1.2rem 0"><b>' + devRows.length + ' existing</b>' + devRows.map(r => '<div class="li">' + (r.image_url ? '<img src="' + esc(r.image_url) + '" alt="">' : '') +
-    '<div><b>' + esc(rowName(r)) + '</b><br><small>' + esc(devTab === 'items' ? r.kind + ' · ' + r.rarity + ' · ' + r.side : devTab === 'collections' ? (r.is_active_drop ? 'weekly drop' : 'collection') : devTab === 'news' ? new Date(r.created_at).toLocaleString() : devTab === 'cases' ? 'holds: ' + nameOf(devColls, r.collection_id) + (r.allow_gold ? '' : ' (no gold)') : (devTab === 'shop_keys' || devTab === 'shop_cases') ? '$' + Number(r.price).toFixed(2) : r.currency_piece + ' · ends ' + new Date(r.ends_at).toLocaleString()) + '</small></div>' +
+    '<div><b>' + esc(rowName(r)) + '</b><br><small>' + esc(isItemTab(devTab) ? r.kind + ' · ' + r.rarity + ' · ' + r.side : devTab === 'storage_defs' ? '$' + Number(r.price).toFixed(2) + ' · holds ' + r.capacity + ' items' : devTab === 'collections' ? (r.is_active_drop ? 'weekly drop' : 'collection') : devTab === 'news' ? new Date(r.created_at).toLocaleString() : devTab === 'cases' ? 'holds: ' + nameOf(devColls, r.collection_id) + (r.allow_gold ? '' : ' (no gold)') : (devTab === 'shop_keys' || devTab === 'shop_cases') ? '$' + Number(r.price).toFixed(2) : r.currency_piece + ' · ends ' + new Date(r.ends_at).toLocaleString()) + '</small></div>' +
     '<button data-act="edit" data-id="' + r.id + '">Edit</button><button data-act="del" data-id="' + r.id + '">Delete</button></div>').join('');
   $('devBody').innerHTML = h;
 }
 $('devBody').addEventListener('click', async e => {
+  const emo = e.target.closest('[data-emoji]'); if (emo) { $('dv_emoji').value = emo.dataset.emoji; return; }
   const pl = e.target.closest('[data-playsnd]'); if (pl) { e.preventDefault(); try { new Audio(pl.dataset.playsnd).play(); } catch (x) { /* ignore */ } return; }
   const dz = e.target.closest('.drop'); if (dz) { $(dz.dataset.for).click(); return; }
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -1301,15 +1323,20 @@ $('devBody').addEventListener('click', async e => {
     if (a === 'cancel') { devEdit = null; return devRender(); }
     if (a === 'edit') { devEdit = devRows.find(r => r.id === id); return devRender(); }
     if (a === 'del' || a === 'delq' || a === 'dels' || a === 'dell') {
-      const wipe = a === 'del' && devTab === 'items';
+      const wipe = a === 'del' && isItemTab(devTab);
       if (!confirm(wipe ? 'Delete this item from the whole game? It is removed from EVERY player\'s inventory and loadouts, and this cannot be undone.' : 'Delete this?')) return;
-      const { error } = wipe ? await db.rpc('dev_delete_item', { p_item: id }) : await db.from(a === 'del' ? devTab : a === 'delq' ? 'operation_quests' : a === 'dell' ? 'operation_level_rewards' : 'operation_shop').delete().eq('id', id);
+      const { error } = wipe ? await db.rpc('dev_delete_item', { p_item: id }) : await db.from(a === 'del' ? tbl() : a === 'delq' ? 'operation_quests' : a === 'dell' ? 'operation_level_rewards' : 'operation_shop').delete().eq('id', id);
       if (error) throw error;
       if (a === 'del') devEdit = null;
       devMsg('Deleted.'); return devRender();
     }
     if (a === 'save') {
       const row = await collect(F[devTab], devEdit || {}, 'dv_');
+      if (isItemTab(devTab)) {
+        if (TAB_KIND[devTab]) row.kind = TAB_KIND[devTab];
+        if (!devEdit) Object.assign(row, Object.assign({ piece: 'pawn', side: 'both', wear_cap: 1, wear_min: 0, wear_max: 0, is_pattern_based: false, is_default: false }, row));
+        if (row.pattern_config) row.pattern_config = Object.assign({}, (devEdit && devEdit.pattern_config) || {}, row.pattern_config);
+      }
       if (devTab === 'shop_keys' || devTab === 'shop_cases') { if (!row.case_id || !(row.price > 0)) throw new Error('Pick a case and a price.'); }
       else if (!(row.name || row.title)) throw new Error('Give it a name first.');
       if (devTab === 'operations') {
@@ -1317,9 +1344,9 @@ $('devBody').addEventListener('click', async e => {
         if (d > 0) row.ends_at = new Date(Date.now() + d * 864e5).toISOString(); else if (!devEdit) throw new Error('Set how many days the operation lasts.');
       }
       const colls = row._colls; delete row._colls;
-      const r = devEdit ? await db.from(devTab).update(row).eq('id', devEdit.id).select().single() : await db.from(devTab).insert(row).select().single();
+      const r = devEdit ? await db.from(tbl()).update(row).eq('id', devEdit.id).select().single() : await db.from(tbl()).insert(row).select().single();
       if (r.error) throw r.error;
-      if (devTab === 'items' && colls) {
+      if (isItemTab(devTab) && colls) {
         const dl = await db.from('item_collections').delete().eq('item_id', r.data.id); if (dl.error) throw dl.error;
         if (colls.length) { const ins = await db.from('item_collections').insert(colls.map(c => ({ item_id: r.data.id, collection_id: c }))); if (ins.error) throw ins.error; }
       }
@@ -1495,7 +1522,7 @@ $('opsView').addEventListener('click', async e => {
   setTimeout(() => { if (view.startsWith('op:')) opRender(view.slice(3)); }, 500);
 });
 async function shopRender() {
-  const [sc, sk, cs] = await Promise.all([db.from('shop_cases').select('*').order('created_at'), db.from('shop_keys').select('*').order('created_at'), db.from('cases').select('*')]);
+  const [sc, sk, cs, sd] = await Promise.all([db.from('shop_cases').select('*').order('created_at'), db.from('shop_keys').select('*').order('created_at'), db.from('cases').select('*'), db.from('storage_defs').select('*').order('created_at')]);
   if (view !== 'shop') return;
   const cname = id => { const c = (cs.data || []).find(x => x.id === id); return c ? c.name : '?'; };
   const im = u => u ? '<img src="' + esc(u) + '" alt="" draggable="false" style="height:56px;width:56px;object-fit:contain">' : '';
@@ -1503,13 +1530,14 @@ async function shopRender() {
   const card = (kind, r, title, sub, img) => '<div class="op"><div class="row2"><div style="display:flex;gap:.8rem;align-items:center">' + (img || '') + '<div><h3>' + esc(title) + '</h3><div style="color:var(--mute)">' + esc(sub) + '</div></div></div>' +
     '<button class="primary" data-buy="' + r.id + '" data-kind="' + kind + '">Buy for $' + Number(r.price).toFixed(2) + '</button></div></div>';
   const cases = (sc.data || []).map(r => card('case', r, cname(r.case_id), 'A case. You also need a ' + cname(r.case_id) + ' key to open it.', im(cobj(r.case_id).image_url))).join('');
+  const storage = (sd.data || []).map(r => card('storage', r, r.name, 'Holds up to ' + r.capacity + ' items. Items inside are safe from trading and trade-ups.', im(r.image_url))).join('');
   const keys = (sk.data || []).map(r => card('key', r, cname(r.case_id) + ' Key', 'Opens a ' + cname(r.case_id) + ' case.', im(cobj(r.case_id).key_image_url || cobj(r.case_id).image_url))).join('');
-  $('shopView').innerHTML = '<h2 style="margin-bottom:1rem">Shop</h2>' + (cases || keys ? (cases ? '<h3>Cases</h3>' + cases : '') + (keys ? '<h3 style="margin-top:1rem">Keys</h3>' + keys : '') : '<p style="color:var(--mute)">Nothing for sale yet.</p>');
+  $('shopView').innerHTML = '<h2 style="margin-bottom:1rem">Shop</h2>' + (cases || keys || storage ? (cases ? '<h3>Cases</h3>' + cases : '') + (keys ? '<h3 style="margin-top:1rem">Keys</h3>' + keys : '') + (storage ? '<h3 style="margin-top:1rem">Storage containers</h3>' + storage : '') : '<p style="color:var(--mute)">Nothing for sale yet.</p>');
 }
 $('shopView').addEventListener('click', async e => {
   const b = e.target.closest('[data-buy]'); if (!b) return;
   const label = b.textContent; b.disabled = true;
-  const { error } = await db.rpc(b.dataset.kind === 'case' ? 'buy_case' : 'buy_key', { p_listing: b.dataset.buy });
+  const { error } = await (b.dataset.kind === 'storage' ? db.rpc('buy_storage', { p_def: b.dataset.buy }) : db.rpc(b.dataset.kind === 'case' ? 'buy_case' : 'buy_key', { p_listing: b.dataset.buy }));
   if (error) { b.disabled = false; return showErr(error.message); }
   const ses = await db.auth.getSession(); if (ses.data.session) loadProfile(ses.data.session.user.id);
   b.textContent = 'Bought!'; playSound('purchase');
@@ -1569,6 +1597,7 @@ function itemImg(it, seed, h, wear) {
   const pcfg = (it.is_pattern_based && it.pattern_config) || {}, sheetOn = pcfg.effect === 'pattern sheet' && pcfg.sheet_url, filt = (sheetOn && pcfg.sheet_mode === 'all' ? 'brightness(18) ' : '') + (p.f ? p.f + ' ' : '') + ((it.pattern_config && it.pattern_config.brightness && it.pattern_config.brightness !== 1) ? 'brightness(' + it.pattern_config.brightness + ') ' : '') + 'saturate(' + (1 - 0.55 * w).toFixed(2) + ') brightness(' + (1 - 0.3 * w).toFixed(2) + ') contrast(' + (1 - 0.15 * w).toFixed(2) + ')';
   const tf = p.t ? 'transform:' + p.t + ';' : '';
   const iu = it.image_url || (it.set_images && (it.set_images.pawn || Object.values(it.set_images)[0]));
+  if (!iu && it.pattern_config && it.pattern_config.emoji) return '<div style="height:' + hh + ';display:grid;place-items:center;font-size:' + (typeof h === 'number' ? h * 0.7 : 40) + 'px;line-height:1">' + esc(it.pattern_config.emoji) + '</div>';
   if (!iu && it.kind === 'sound kit') return '<div class="boxph" style="font-size:' + (typeof h === 'number' ? h * 0.8 : 48) + 'px">♪</div>';
   if (!iu && it.kind === 'board') { const bc = it.pattern_config || {}; return '<div style="width:' + hh + ';height:' + hh + ';border-radius:4px;background:repeating-conic-gradient(' + esc(bc.board_light || '#e6ecef') + ' 0 25%,' + esc(bc.board_dark || '#6f8ea3') + ' 0 50%) 0 0/50% 50%"></div>'; }
   if (!iu) return '<div class="pc ' + (it.side === 'black' ? 'b' : 'w') + '" style="height:' + hh + ';display:grid;place-items:center;font-size:' + (typeof h === 'number' ? h * 0.7 : 40) + 'px;filter:' + filt + ';' + tf + '">' + pieceHtml(CURG[it.piece] || 'p', it.side === 'black' ? 'b' : 'w') + '</div>';
@@ -1588,7 +1617,7 @@ function itemImg(it, seed, h, wear) {
 function inspect(it, wear, seed, head) {
   const col = RCOL[it.rarity] || '#fff';
   $('inspBox').innerHTML = colImg(it) + (head ? '<h2 style="margin-bottom:.6rem">' + esc(head) + '</h2>' : '') + '<div style="overflow:hidden;padding:.6rem">' + itemImg(it, seed, 150, wear) + '</div>' +
-    '<h3 style="font-family:Georgia,serif;color:' + col + ';margin:.4rem 0 0">' + esc(it.name) + '</h3><div style="color:var(--mute)">' + esc(it.description) + '</div>' +
+    '<h3 style="font-family:Georgia,serif;color:' + col + ';margin:.4rem 0 0">' + esc(it.name) + '</h3><div style="color:var(--mute)">' + esc(it.description) + '</div>' + (it.tradable === false ? '<div style="color:var(--gold);font-size:.85rem">Untradeable</div>' : '') +
     '<div class="stat" style="display:flex;justify-content:space-between;padding:.5rem .7rem;margin-top:.6rem;background:#0d1a23;border-radius:8px"><span style="color:var(--mute)">Rarity</span><b style="color:' + col + '">' + esc(it.rarity) + '</b></div>' +
     '<div class="stat" style="display:flex;justify-content:space-between;padding:.5rem .7rem;margin-top:.4rem;background:#0d1a23;border-radius:8px"><span style="color:var(--mute)">Wear</span><b>' + COND(wear) + ' · ' + Number(wear).toFixed(10) + '</b></div>' +
     (it.is_pattern_based ? '<div class="stat" style="display:flex;justify-content:space-between;padding:.5rem .7rem;margin-top:.4rem;background:#0d1a23;border-radius:8px"><span style="color:var(--mute)">Pattern</span><b>#' + (seed || 1) + '</b></div>' : '') +
@@ -1602,8 +1631,8 @@ async function invRender() {
   db.from('collections').select('id,name,image_url').then(r => { colls = r.data || []; });
   const ses = await db.auth.getSession(); if (!ses.data.session) return;
   const uid = ses.data.session.user.id;
-  const [inv, its, uc, uk, cs] = await Promise.all([db.from('inventory').select('*').eq('owner_id', uid).order('acquired_at', { ascending: false }),
-    db.from('items').select('*'), db.from('user_cases').select('*'), db.from('user_keys').select('*'), db.from('cases').select('*'), loadIC()]);
+  const [inv, its, uc, uk, cs, , su, si, sd] = await Promise.all([db.from('inventory').select('*').eq('owner_id', uid).order('acquired_at', { ascending: false }),
+    db.from('items').select('*'), db.from('user_cases').select('*'), db.from('user_keys').select('*'), db.from('cases').select('*'), loadIC(), db.from('storage_units').select('*').order('created_at'), db.from('storage_items').select('*'), db.from('storage_defs').select('*')]);
   if (view !== 'inv') return;
   if (inv.error) { $('invView').innerHTML = '<p>Could not load your inventory: ' + esc(inv.error.message) + '</p>'; return; }
   invData = { items: its.data || [], inv: inv.data || [], cases: cs.data || [] };
@@ -1611,6 +1640,7 @@ async function invRender() {
   const keys = {}; (uk.data || []).forEach(k => { keys[k.case_id] = k.qty; });
   const cases = (uc.data || []).filter(r => r.qty > 0), keyRows = (uk.data || []).filter(r => r.qty > 0);
   invData.keys = keys; invData.cq = {}; (uc.data || []).forEach(r => { invData.cq[r.case_id] = r.qty; });
+  const stored = new Set((si.data || []).map(r => r.inventory_id)); invData.units = su.data || []; invData.sitems = si.data || []; invData.defs = sd.data || [];
   const caseOf = id => (cs.data || []).find(x => x.id === id) || {};
   const typeLabel = it => it.kind === 'piece' ? (it.piece ? it.piece[0].toUpperCase() + it.piece.slice(1) : 'Piece') : (it.kind || 'Item');
   const card = (img, name, sub, color, extra, btn, attrs) => '<div class="card2"' + (attrs || '') + '>' + extra + '<div class="cin"><div class="cimg">' + img + '</div><b>' + esc(name) + '</b><small style="color:var(--mute);display:block">' + esc(sub) + '</small>' + (btn || '') + '</div><div class="rbar" style="background:' + color + '"></div></div>';
@@ -1620,12 +1650,15 @@ async function invRender() {
     return card(caseImg(c), c.name || '?', 'Case · ' + k + (k === 1 ? ' key' : ' keys'), RCOL.gray, '<span class="qty">×' + r.qty + '</span>',
       '', ' data-case="' + r.case_id + '" style="cursor:pointer" title="Click to look inside and open"'); }).join('');
   const cardsKeys = keyRows.map(r => { const c = caseOf(r.case_id); return card(keyImg(c), (c.name || '?') + ' Key', 'Key', RCOL.gray, '<span class="qty">×' + r.qty + '</span>'); }).join('');
-  const cardsItems = invData.inv.map(r => { const it = invData.items.find(x => x.id === r.item_id); if (!it) return '';
+  const cardsStorage = invData.units.map(u => { const def = invData.defs.find(x => x.id === u.def_id) || { capacity: 0, image_url: null }, n = invData.sitems.filter(r => r.unit_id === u.id).length;
+    return card(def.image_url ? '<img src="' + esc(def.image_url) + '" alt="" draggable="false">' : '<div class="boxph">▤</div>', u.name || 'Storage', 'Storage · ' + n + ' / ' + def.capacity, RCOL.gray, '', '', ' data-unit="' + u.id + '" style="cursor:pointer"'); }).join('');
+  const cardsItems = invData.inv.filter(r => !stored.has(r.id)).map(r => { const it = invData.items.find(x => x.id === r.item_id); if (!it) return '';
     return card(itemImg(it, r.pattern_seed, 84, r.wear), it.name, typeLabel(it), RCOL[it.rarity] || RCOL.gray, '', '', ' data-inv="' + r.id + '" style="cursor:pointer"'); }).join('');
-  $('invView').innerHTML = '<h2 style="margin-bottom:.8rem">Inventory</h2>' + ((cardsCases + cardsKeys + cardsItems) ? '<div class="grid">' + cardsCases + cardsKeys + cardsItems + '</div><p style="color:var(--mute);font-size:.85rem;margin-top:.8rem">Click a case to look inside and open it.</p>' : '<p style="color:var(--mute)">Nothing here yet.</p>');
+  $('invView').innerHTML = '<h2 style="margin-bottom:.8rem">Inventory</h2>' + ((cardsCases + cardsKeys + cardsStorage + cardsItems) ? '<div class="grid">' + cardsCases + cardsKeys + cardsStorage + cardsItems + '</div><p style="color:var(--mute);font-size:.85rem;margin-top:.8rem">Click a case to look inside and open it.</p>' : '<p style="color:var(--mute)">Nothing here yet.</p>');
 }
 $('invView').addEventListener('click', async e => {
   const cc = e.target.closest('[data-case]'); if (cc) { openCaseScreen(cc.dataset.case); return; }
+  const un = e.target.closest('[data-unit]'); if (un) { openStorage(un.dataset.unit); return; }
   const c = e.target.closest('[data-inv]'); if (!c) return;
   const r = invData.inv.find(x => x.id === c.dataset.inv), it = r && invData.items.find(x => x.id === r.item_id);
   if (it) inspect(it, Number(r.wear), r.pattern_seed);
@@ -1693,9 +1726,9 @@ async function loadLoadouts() {
   const miss = [1, 2, 3].filter(n => !(lo.data || []).some(l => l.slot === n));
   if (miss.length) { await db.from('loadouts').insert(miss.map(n => ({ owner_id: uid, slot: n, name: 'Loadout ' + n }))); lo = await db.from('loadouts').select('*').eq('owner_id', uid).order('slot'); }
   const ids = (lo.data || []).map(l => l.id);
-  const [sl, inv, its, pr] = await Promise.all([ids.length ? db.from('loadout_slots').select('*').in('loadout_id', ids) : { data: [] },
-    db.from('inventory').select('*').eq('owner_id', uid), db.from('items').select('*'), db.from('profiles').select('active_loadout').eq('id', uid).maybeSingle()]);
-  loData = { loadouts: lo.data || [], slots: sl.data || [], inv: inv.data || [], items: its.data || [], active: (pr.data && pr.data.active_loadout) || 1 };
+  const [sl, inv, its, pr, st] = await Promise.all([ids.length ? db.from('loadout_slots').select('*').in('loadout_id', ids) : { data: [] },
+    db.from('inventory').select('*').eq('owner_id', uid), db.from('items').select('*'), db.from('profiles').select('active_loadout').eq('id', uid).maybeSingle(), db.from('storage_items').select('inventory_id')]);
+  loData = { loadouts: lo.data || [], slots: sl.data || [], inv: inv.data || [], items: its.data || [], active: (pr.data && pr.data.active_loadout) || 1, stored: new Set(((st && st.data) || []).map(r => r.inventory_id)) };
   buildEq();
 }
 const SLOT_KEYS = ['king', 'queen', 'rook_1', 'rook_2', 'bishop_1', 'bishop_2', 'knight_1', 'knight_2'].concat([1, 2, 3, 4, 5, 6, 7, 8].map(n => 'pawn_' + n));
@@ -1736,7 +1769,7 @@ function loRender() {
 }
 function loPick(side, key) {
   const type = key.split('_')[0];
-  const rows = loData.inv.map(r => ({ r, it: loData.items.find(i => i.id === r.item_id) })).filter(x => x.it && (key === 'flair' || key === 'name_effect' || key === 'sound_kit' || x.it.side === 'both' || x.it.side === side) &&
+  const rows = loData.inv.filter(r => !(loData.stored && loData.stored.has(r.id))).map(r => ({ r, it: loData.items.find(i => i.id === r.item_id) })).filter(x => x.it && (key === 'flair' || key === 'name_effect' || key === 'sound_kit' || x.it.side === 'both' || x.it.side === side) &&
     (key === 'set' ? x.it.kind === 'set' : key === 'board' ? x.it.kind === 'board' : key === 'flair' ? x.it.kind === 'flair' : key === 'name_effect' ? x.it.kind === 'username effect' : key === 'sound_kit' ? x.it.kind === 'sound kit' : (x.it.kind === 'piece' && x.it.piece === type)));
   $('inspBox').innerHTML = '<h3 style="margin-bottom:.6rem">' + (side ? side + ' · ' : '') + slotName(key).toLowerCase() + '</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(100px,1fr));max-height:55vh;overflow:auto">' +
     '<div class="card2" data-pick="" style="cursor:pointer"><div class="cin"><div class="cimg"><div class="boxph">∅</div></div><b>None</b><small style="color:var(--mute);display:block">default</small></div><div class="rbar" style="background:var(--line)"></div></div>' +
@@ -2145,7 +2178,12 @@ function applyName() {
   el.style.setProperty('--nc', pc.name_color || '#f0b429');
   let fl = $('sFlair');
   if (!fl) { fl = document.createElement('img'); fl.id = 'sFlair'; fl.alt = ''; fl.draggable = false; fl.style.cssText = 'height:22px;vertical-align:middle;margin-right:.35rem'; el.parentNode.insertBefore(fl, el); }
-  if (eqFlair && eqFlair.image_url) { fl.src = eqFlair.image_url; fl.style.display = ''; } else fl.style.display = 'none';
+  let fe = $('sFlairE');
+  if (!fe) { fe = document.createElement('span'); fe.id = 'sFlairE'; fe.style.cssText = 'font-size:1.2rem;margin-right:.35rem;vertical-align:middle'; el.parentNode.insertBefore(fe, el); }
+  const em = eqFlair && eqFlair.pattern_config && eqFlair.pattern_config.emoji;
+  if (eqFlair && eqFlair.image_url) { fl.src = eqFlair.image_url; fl.style.display = ''; fe.style.display = 'none'; }
+  else if (em) { fe.textContent = em; fe.style.display = ''; fl.style.display = 'none'; }
+  else { fl.style.display = 'none'; fe.style.display = 'none'; }
 }
 
 // ---------- Analysis board (Stockfish, evaluation bar, best moves, free movement) ----------
@@ -2455,10 +2493,10 @@ function tuValidCols(it) {   // the collections of this item that really have so
 }
 async function tuRender() {
   const ses = await db.auth.getSession(); if (!ses.data.session) return;
-  const [inv, its, , ps] = await Promise.all([db.from('inventory').select('*').eq('owner_id', ses.data.session.user.id).order('acquired_at', { ascending: false }), db.from('items').select('*'), loadIC(), db.rpc('get_public_settings')]);
+  const [inv, its, , ps, st] = await Promise.all([db.from('inventory').select('*').eq('owner_id', ses.data.session.user.id).order('acquired_at', { ascending: false }), db.from('items').select('*'), loadIC(), db.rpc('get_public_settings'), db.from('storage_items').select('inventory_id')]);
   if (view !== 'tu') return;
   pubSettings = Object.assign({ tradeup_preview: true }, (ps && ps.data) || {});
-  tu.inv = inv.data || []; tu.items = its.data || []; tu.sel = tu.sel.filter(id => tu.inv.some(r => r.id === id));
+  tu.inv = (inv.data || []).filter(r => !((st && st.data) || []).some(x => x.inventory_id === r.id)); tu.items = its.data || []; tu.sel = tu.sel.filter(id => tu.inv.some(r => r.id === id));
   tuDraw();
 }
 function tuDraw() {
@@ -2548,7 +2586,7 @@ function mkGridDraw() {
   list.sort((a, b) => sort === 'low' ? lo(a) - lo(b) : sort === 'high' ? (b.low == null ? -1 : Number(b.low)) - (a.low == null ? -1 : Number(a.low)) : sort === 'qty' ? b.qty - a.qty : String(a.name).localeCompare(b.name));
   $('mkGrid').innerHTML = list.map(i => '<div class="card2" data-mk="' + i.id + '" style="cursor:pointer;' + (i.on_market ? '' : 'opacity:.5') + '"><div class="cin"><div class="cimg">' + itemImg(i, 1, 84, 0) + '</div><b>' + esc(i.name) +
     '</b><small style="color:' + (RCOL[i.rarity] || '#fff') + ';display:block">' + esc(i.rarity) + '</small>' +
-    (i.on_market ? '<div style="margin-top:.3rem">' + (i.low != null ? 'From <b>' + money(i.low) + '</b>' : 'None for sale') + '</div><small style="color:var(--mute);display:block">' + i.qty + ' for sale · market ' + money(i.price) + '</small>' : '<small style="color:var(--gold);display:block;margin-top:.3rem">Not on the market yet</small>') +
+    (i.on_market ? '<div style="margin-top:.3rem">' + (i.low != null ? 'From <b>' + money(i.low) + '</b>' : 'None for sale') + '</div><small style="color:var(--mute);display:block">' + i.qty + ' for sale · market ' + money(i.price) + '</small>' : '<small style="color:var(--gold);display:block;margin-top:.3rem">' + (i.tradable === false ? 'Untradeable' : 'Not on the market yet') + '</small>') +
     '</div><div class="rbar" style="background:' + (RCOL[i.rarity] || RCOL.gray) + '"></div></div>').join('') || '<p style="color:var(--mute)">Nothing here yet.</p>';
 }
 function mkChart(series, sales) {
@@ -2606,13 +2644,18 @@ async function mkItemRender() {
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.6rem"><div><label>Pattern from</label><input id="mk_pf" type="number" min="1" max="999" value="100"></div><div><label>to</label><input id="mk_pt" type="number" min="1" max="999" value="100"></div><div><label>Price multiplier</label><input id="mk_pm" type="number" min="0.1" step="0.1" value="3"></div><div><label>Note</label><input id="mk_pn" placeholder="e.g. fade seed"></div></div>' +
       '<div class="btns" style="margin-top:.6rem"><button data-mkadm="opadd">Add pattern price</button></div></details>';
   }
+  if (d.admin && it.tradable === false) adm = '<div class="mkadm">This item is untradeable, so it cannot be on the market. Tick "can be traded on the market" in its item settings to change that.</div>';
+  const ords = d.my_orders || [], book = d.order_book || {};
+  const ordHtml = '<div class="op"><b>Buy orders</b><p style="color:var(--mute);font-size:.85rem;margin:.2rem 0 .5rem">' + (book.n ? book.n + ' open buy orders, highest ' + money(book.max) + '.' : 'No open buy orders.') + ' Your money is held until something at or under your price is listed, and any difference is refunded.</p>' +
+    ords.map(o => '<div class="li"><div><b>' + (o.cond || 'Any condition') + '</b><br><small>up to ' + money(o.max_price) + '</small></div><button data-ordercancel="' + o.id + '">Cancel order</button></div>').join('') +
+    '<div class="btns" style="margin-top:.5rem"><select id="mkOrdCond" style="max-width:170px"><option value="">Any condition</option>' + CONDS.map(c => '<option>' + c + '</option>').join('') + '</select><input id="mkOrdPrice" type="number" min="0.03" step="0.01" value="' + Number(d.price || 1).toFixed(2) + '" style="width:100px"><button class="primary" data-order="1">Place buy order</button></div></div>';
   $('mkView').innerHTML = '<div class="btns"><button data-mkback="1">← All items</button></div>' +
     '<div class="op" style="margin-top:.6rem"><div class="row2"><div style="display:flex;gap:1rem;align-items:center"><div style="width:96px;text-align:center">' + itemImg(it, 1, 90, 0.2) + '</div><div><h2 style="color:' + (RCOL[it.rarity] || '#fff') + '">' + esc(it.name) + '</h2><div style="color:var(--mute)">' + esc(it.rarity) + (it.kind ? ' · ' + esc(it.kind) : '') + '</div><div style="color:var(--mute);font-size:.85rem">' + esc(it.description || '') + '</div></div></div>' +
     '<div style="text-align:right"><div style="color:var(--mute);font-size:.85rem">Market price (Average wear)</div><div style="font-size:1.8rem;color:var(--gold);font-weight:700">' + (d.price != null ? money(d.price) : '-') + '</div></div></div></div>' + adm +
     '<div class="op"><div class="row2"><b>Price history</b><span class="btns">' + [7, 30, 90].map(n => '<button data-days="' + n + '" class="' + (n === mkDays ? 'primary' : '') + '">' + n + ' days</button>').join('') + '</span></div><div style="margin-top:.6rem">' + mkChart((h.data || {}).series, (h.data || {}).sales) + '</div>' +
     '<table class="mktbl" style="margin-top:.8rem"><tr><th>Condition</th><th>Price</th><th>Lowest</th><th>Listed</th><th>Sold 24h</th><th>7 days</th><th>30 days</th></tr>' + tbl + '</table></div>' +
     (mine ? '<div class="op"><b>Your copies</b><p style="color:var(--mute);font-size:.85rem;margin:.2rem 0 .5rem">You keep ' + Math.round((1 - fee) * 1000) / 10 + '% of the price you list at (a ' + Math.round(fee * 1000) / 10 + '% fee). Selling now takes the best offer immediately.</p>' + mine + '</div>' : '') +
-    '<div class="op"><div class="row2"><b>For sale (' + ls.length + ')</b><select id="mkCondSel" style="max-width:190px"><option value="">All conditions</option>' + CONDS.map(c => '<option' + (c === mkCondSel ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></div>' +
+    ordHtml + '<div class="op"><div class="row2"><b>For sale (' + ls.length + ')</b><select id="mkCondSel" style="max-width:190px"><option value="">All conditions</option>' + CONDS.map(c => '<option' + (c === mkCondSel ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></div>' +
     '<table class="mktbl" style="margin-top:.5rem"><tr><th>Condition</th><th>Wear</th><th>Pattern</th><th>Price</th><th></th></tr>' + (listings || '<tr><td colspan="5" style="color:var(--mute)">Nothing for sale right now.</td></tr>') + '</table><small style="color:var(--mute)">Click a row to inspect that exact item.</small></div>';
   window.mkLs = ls; window.mkIt = it;
 }
@@ -2642,6 +2685,12 @@ $('mkView').addEventListener('click', async e => {
     ls.disabled = true; const { error } = await db.rpc('market_list', { p_inv: ls.dataset.list, p_price: price }); if (error) showErr(error.message);
     mkRefreshBal(); return mkItemRender();
   }
+  if (t.closest('[data-order]')) {
+    const { error } = await db.rpc('market_order', { p_item: mkItemId, p_cond: $('mkOrdCond').value || null, p_price: Number($('mkOrdPrice').value) });
+    if (error) showErr(error.message); mkRefreshBal(); return mkItemRender();
+  }
+  const oc = t.closest('[data-ordercancel]');
+  if (oc) { const { error } = await db.rpc('market_order_cancel', { p_order: oc.dataset.ordercancel }); if (error) showErr(error.message); mkRefreshBal(); return mkItemRender(); }
   const row = t.closest('[data-linspect]');
   if (row && !t.closest('button')) { const l = (window.mkLs || []).find(x => x.id === row.dataset.linspect); if (l) inspect(window.mkIt, Number(l.wear), l.seed, null); return; }
   const ad = t.closest('[data-mkadm]');
@@ -2668,7 +2717,7 @@ $('mkView').addEventListener('click', async e => {
 function mkSettings() {   // admin: fee, wear price multipliers, and which rarities the bots may trade
   const rc = mkCfg.rarity || {};
   $('inspBox').innerHTML = '<h2 style="margin-bottom:.4rem">Market settings</h2><div style="text-align:left;max-height:62vh;overflow:auto"><label style="display:block;color:var(--mute);font-size:.85rem">Fee on sales (%)</label><input id="mc_fee" type="number" min="0" max="50" step="0.5" value="' + Math.round(mkCfg.fee * 1000) / 10 + '">' +
-    '<b style="display:block;margin-top:.8rem">Price multiplier by wear</b>' + CONDS.map((c, i) => '<label style="display:block;color:var(--mute);font-size:.85rem"><span style="color:' + CCOL[i] + '">●</span> ' + c + '</label><input id="mc_w' + i + '" type="number" min="0.05" step="0.05" value="' + (mkCfg.wear_mult[c] || 1) + '">').join('') +
+    '<label style="display:block;color:var(--mute);font-size:.85rem;margin-top:.8rem">How much real player sales move the price (0 to 1)</label><input id="mc_alpha" type="number" min="0" max="1" step="0.05" value="' + (mkCfg.alpha == null ? 0.35 : mkCfg.alpha) + '"><b style="display:block;margin-top:.8rem">Price multiplier by wear</b>' + CONDS.map((c, i) => '<label style="display:block;color:var(--mute);font-size:.85rem"><span style="color:' + CCOL[i] + '">●</span> ' + c + '</label><input id="mc_w' + i + '" type="number" min="0.05" step="0.05" value="' + (mkCfg.wear_mult[c] || 1) + '">').join('') +
     '<b style="display:block;margin-top:.8rem">Bots by rarity</b><p style="color:var(--mute);font-size:.8rem;margin:.2rem 0">Untick a rarity to keep bots out of it completely. The number is how many real player sales in 7 days make bots stop (0 = never stop). Each item can override it.</p>' +
     RARITIES.map(r => '<div style="display:flex;gap:.6rem;align-items:center;margin-top:.3rem"><label style="display:flex;gap:.4rem;align-items:center;width:120px;margin:0"><input type="checkbox" id="mr_b_' + r.replace(' ', '_') + '" style="width:auto"' + ((rc[r] || {}).bots === false ? '' : ' checked') + '>' + r + '</label><input id="mr_l_' + r.replace(' ', '_') + '" type="number" min="0" step="1" value="' + ((rc[r] || {}).liq || 0) + '" style="width:100px"></div>').join('') +
     '</div><div class="btns" style="margin-top:1rem"><button class="primary" id="mcSave">Save</button><button id="inspClose">Cancel</button></div>';
@@ -2676,11 +2725,36 @@ function mkSettings() {   // admin: fee, wear price multipliers, and which rarit
   $('mcSave').onclick = async () => {
     const wm = {}; CONDS.forEach((c, i) => { wm[c] = Number($('mc_w' + i).value) || 1; });
     const ra = {}; RARITIES.forEach(r => { const k = r.replace(' ', '_'); ra[r] = { bots: $('mr_b_' + k).checked, liq: Math.max(0, Number($('mr_l_' + k).value) || 0) }; });
-    const { error } = await db.rpc('market_set_config', { p_cfg: { fee: (Number($('mc_fee').value) || 0) / 100, wear_mult: wm, rarity: ra } });
+    const { error } = await db.rpc('market_set_config', { p_cfg: { fee: (Number($('mc_fee').value) || 0) / 100, alpha: Math.min(1, Math.max(0, Number($('mc_alpha').value) || 0)), wear_mult: wm, rarity: ra } });
     if (error) return showErr(error.message);
     $('insp').classList.add('hidden'); mkRender();
   };
 }
+
+// ---------- Storage containers ----------
+function openStorage(unitId) {
+  const u = (invData.units || []).find(x => x.id === unitId); if (!u) return;
+  const def = (invData.defs || []).find(d => d.id === u.def_id) || { capacity: 0 };
+  const stored = new Set((invData.sitems || []).map(r => r.inventory_id));
+  const inside = (invData.sitems || []).filter(r => r.unit_id === u.id).map(r => invData.inv.find(i => i.id === r.inventory_id)).filter(Boolean);
+  const loose = invData.inv.filter(r => !stored.has(r.id));
+  const mini = (r, attr) => { const it = invData.items.find(x => x.id === r.item_id); if (!it) return '';
+    return '<div class="card2" ' + attr + '="' + r.id + '" style="cursor:pointer"><div class="cin"><div class="cimg" style="height:56px">' + itemImg(it, r.pattern_seed, 48, r.wear) + '</div><b>' + esc(it.name) + '</b><small style="color:var(--mute);display:block">' + COND(Number(r.wear)) + '</small></div><div class="rbar" style="background:' + (RCOL[it.rarity] || RCOL.gray) + '"></div></div>'; };
+  const full = inside.length >= def.capacity;
+  $('inspBox').innerHTML = '<h2>' + esc(u.name || 'Storage') + '</h2><div style="color:var(--mute)">' + inside.length + ' / ' + def.capacity + ' items' + (full ? ' · full' : '') + '</div><div class="btns" style="margin:.5rem 0"><button id="stRename">Rename</button></div>' +
+    '<h3 style="text-align:left">Inside (click one to take it out)</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(96px,1fr));max-height:26vh;overflow:auto">' + (inside.map(r => mini(r, 'data-out')).join('') || '<p style="color:var(--mute)">Empty.</p>') + '</div>' +
+    '<h3 style="text-align:left;margin-top:.8rem">Your inventory (click one to put it in)</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(96px,1fr));max-height:26vh;overflow:auto">' + (loose.map(r => mini(r, 'data-in')).join('') || '<p style="color:var(--mute)">Nothing to put in.</p>') + '</div>' +
+    '<div class="btns" style="margin-top:1rem"><button class="primary" id="inspClose">Done</button></div>';
+  $('insp').classList.remove('hidden'); $('inspClose').onclick = () => $('insp').classList.add('hidden');
+  const again = async () => { await invRender(); openStorage(unitId); };
+  $('stRename').onclick = async () => { const n = prompt('Name this storage container', u.name || ''); if (n == null) return; const r = await db.rpc('storage_rename', { p_unit: unitId, p_name: n }); if (r.error) return showErr(r.error.message); again(); };
+  $('inspBox').onclick = async e => {
+    const o = e.target.closest('[data-out]'), n = e.target.closest('[data-in]');
+    if (o) { const r = await db.rpc('storage_take', { p_inv: o.dataset.out }); if (r.error) return showErr(r.error.message); again(); }
+    else if (n) { const r = await db.rpc('storage_put', { p_unit: unitId, p_inv: n.dataset.in }); if (r.error) return showErr(r.error.message); again(); loadLoadouts(); }
+  };
+}
+[['dvTabBoards', 'boards'], ['dvTabFlairs', 'flairs'], ['dvTabNfx', 'nameeffects'], ['dvTabOther', 'otheritems'], ['dvTabStore', 'storage_defs']].forEach(([id, t]) => { $(id).onclick = () => { devTab = t; devEdit = null; devRender(); }; });
 </script>
 </body>
 </html>
