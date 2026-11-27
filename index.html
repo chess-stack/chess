@@ -320,7 +320,7 @@ select{font:inherit;width:100%;padding:.6rem .7rem;border-radius:6px;border:1px 
 <div id="roll" class="hidden"><div class="rbox"><h2 style="margin-bottom:.8rem">Opening case...</h2><div class="rview"><div id="rstrip"></div><div class="rmark"></div></div><button id="rskip">Skip</button></div></div>
 <div id="insp" class="hidden"><div class="box" id="inspBox"></div></div>
 <div id="dev" class="hidden"><div class="panel">
-  <div class="dh"><b>Dev tools</b><span class="btns"><button id="dvTabItems">Items (pieces & sets)</button><button id="dvTabBoards">Boards</button><button id="dvTabFlairs">Flairs</button><button id="dvTabNfx">Name effects</button><button id="dvTabOther">Other items</button><button id="dvTabColls">Collections</button><button id="dvTabCases">Cases</button><button id="dvTabOps">Operations</button><button id="dvTabShop">Shop keys</button><button id="dvTabShopC">Shop cases</button><button id="dvTabMoney">Money</button><button id="dvTabNews">News</button><button id="dvTabPuz">Puzzles</button><button id="dvTabWk">Weekly drops</button><button id="dvTabMed">Year flairs</button><button id="dvTabSnd">Sound kits</button><button id="dvTabSet">Settings</button><button id="dvTabStore">Storage containers</button><button id="dvClose">Close</button></span></div>
+  <div class="dh"><b>Dev tools</b><span class="btns"><button id="dvTabItems">Items (pieces & sets)</button><button id="dvTabBoards">Boards</button><button id="dvTabFlairs">Flairs</button><button id="dvTabNfx">Name effects</button><button id="dvTabOther">Other items</button><button id="dvTabColls">Collections</button><button id="dvTabCases">Cases</button><button id="dvTabOps">Operations</button><button id="dvTabShop">Shop keys</button><button id="dvTabShopC">Shop cases</button><button id="dvTabMoney">Money</button><button id="dvTabNews">News</button><button id="dvTabPuz">Puzzles</button><button id="dvTabWk">Weekly drops</button><button id="dvTabMed">Year flairs</button><button id="dvTabSnd">Sound kits</button><button id="dvTabSet">Settings</button><button id="dvTabStore">Storage containers</button><button id="dvTabShopI">Shop items</button><button id="dvClose">Close</button></span></div>
   <div id="devBody"></div><div id="devMsg"></div>
 </div></div>
 <script src="https://cdn.jsdelivr.net/npm/fzstd@0.1.1/umd/index.js"></script>
@@ -965,6 +965,20 @@ $('btnResign').onclick = async () => {
 
 // ---------- Dev tool (only shows for admin accounts; Supabase enforces is_admin on every save) ----------
 const KINDS = ['piece', 'set', 'charm', 'board', 'clock skin', 'username effect', 'win effect', 'loss effect', 'checkmate effect', 'draw effect', 'flair'];
+let shN = 0;
+function sheetRowHtml(sh) {
+  const i = ++shN;
+  return '<div class="li sheetrow" data-i="' + i + '" data-url="' + esc(sh.url || '') + '" style="display:block"><div style="display:flex;gap:.6rem;align-items:center">' + (sh.url ? '<img src="' + esc(sh.url) + '" alt="" style="height:40px">' : '') +
+    '<div class="drop" data-for="dv_sh_' + i + '" style="flex:1">' + (sh.url ? 'Sheet set. Drop a new one to replace it.' : 'Drop a sheet here, or click') + '</div><input id="dv_sh_' + i + '" type="file" accept="image/*" hidden><button type="button" data-sheetdel="1" style="width:auto">Remove</button></div>' +
+    '<div style="display:flex;gap:.5rem;margin-top:.4rem"><div style="flex:1"><small style="color:var(--mute)">pattern numbers from</small><input id="dv_shf_' + i + '" type="number" min="1" max="999" value="' + (sh.from || 1) + '"></div><div style="flex:1"><small style="color:var(--mute)">to</small><input id="dv_sht_' + i + '" type="number" min="1" max="999" value="' + (sh.to || 999) + '"></div>' +
+    '<div style="flex:1"><small style="color:var(--mute)">chance weight</small><input id="dv_shw_' + i + '" type="number" min="0" step="0.1" value="' + (sh.weight == null ? 1 : sh.weight) + '"></div></div></div>';
+}
+async function emojiToFile(em) {   // an emoji flair is saved as a picture
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const x = c.getContext('2d'); x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = '190px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'; x.fillText(em, 128, 140);
+  const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+  return new File([blob], 'emoji.png', { type: 'image/png' });
+}
 const SOUND_EVENTS = [['move', 'Piece move'], ['capture', 'Capture'], ['castle', 'Castling'], ['check', 'Check'], ['promote', 'Promotion'], ['checkmate', 'Checkmate'], ['game_start', 'Game start'], ['win', 'You win'], ['loss', 'You lose'], ['draw', 'Draw'], ['low_time', 'Under 10 seconds'], ['puzzle_correct', 'Puzzle solved'], ['puzzle_wrong', 'Puzzle failed'], ['case_tick', 'Case roll tick'], ['case_reveal', 'Case reveal'], ['level_up', 'Level up'], ['purchase', 'Purchase'], ['claim', 'Claim a drop']];
 const RARITIES = ['gray', 'light blue', 'blue', 'purple', 'pink', 'red', 'gold'];
 const PIECES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'];
@@ -979,7 +993,7 @@ const EMOJIS = Array.from('😀😁😂🤣😃😄😅😆😉😊😋😎😍�
 const FX = ['none', 'color change', 'size change', 'brightness', 'pattern sheet'];
 const F = {
   items: [['name', 'text'], ['description', 'area'], ['kind', 'sel', ['piece', 'set']], ['piece', 'sel', PIECES], ['rarity', 'sel', RARITIES], ['side', 'sel', ['both', 'white', 'black']],
-          ['wear_range', 'range'], ['brightness', 'bright'], ['is_pattern_based', 'chk'], ['pattern_effect', 'pcfg', FX], ['scratch_black', 'pscr'], ['pattern_sheet', 'patsheet'], ['sheet_mode', 'psmode'], ['allow_charms', 'pcharm'],
+          ['wear_range', 'range'], ['brightness', 'bright'], ['is_pattern_based', 'chk'], ['pattern_effect', 'pcfg', FX], ['scratch_black', 'pscr'], ['pattern_sheets', 'sheets'], ['sheet_zoom', 'zoom'], ['sheet_mode', 'psmode'], ['allow_charms', 'pcharm'],
           ['is_default', 'chk'], ['tradable', 'chk'], ['collections', 'colls'], ['image_url', 'img'], ['set_images', 'setimgs']],
   collections: [['name', 'text'], ['description', 'area'], ['coll_kind', 'sel', ['items', 'flairs']], ['is_active_drop', 'chk'], ['image_url', 'img']],
   cases: [['name', 'text'], ['description', 'area'], ['collection_id', 'coll'], ['allow_gold', 'chk'], ['image_url', 'img'], ['key_image_url', 'img']],
@@ -990,14 +1004,15 @@ const F = {
   shop_keys: [['case_id', 'case'], ['price', 'money']],
   shop_cases: [['case_id', 'case'], ['price', 'money']],
   news: [['title', 'text'], ['body', 'area'], ['image_url', 'img']],
-  boards: [['name', 'text'], ['description', 'area'], ['rarity', 'sel', RARITIES], ['side', 'sel', ['both', 'white', 'black']], ['board_light', 'pcol'], ['board_dark', 'pcol'], ['tradable', 'chk'], ['collections', 'colls'], ['image_url', 'img']],
-  flairs: [['name', 'text'], ['description', 'area'], ['rarity', 'sel', RARITIES], ['emoji', 'emoji'], ['tradable', 'chk'], ['collections', 'colls'], ['image_url', 'img']],
-  nameeffects: [['name', 'text'], ['description', 'area'], ['rarity', 'sel', RARITIES], ['name_fx', 'psel', ['none', 'glow', 'pulse', 'rainbow', 'shimmer']], ['name_color', 'pcol'], ['tradable', 'chk'], ['collections', 'colls'], ['image_url', 'img']],
-  otheritems: [['name', 'text'], ['description', 'area'], ['kind', 'sel', OTHER_KINDS], ['rarity', 'sel', RARITIES], ['side', 'sel', ['both', 'white', 'black']], ['tradable', 'chk'], ['collections', 'colls'], ['image_url', 'img']],
-  storage_defs: [['name', 'text'], ['description', 'area'], ['price', 'money'], ['capacity', 'int'], ['image_url', 'img']]
+  boards: [['name', 'text'], ['description', 'area'], ['rarity', 'sel', RARITIES], ['side', 'sel', ['both', 'white', 'black']], ['board_light', 'pcol'], ['board_dark', 'pcol'], ['brightness', 'bright'], ['tradable', 'chk'], ['collections', 'colls'], ['image_url', 'img']],
+  flairs: [['name', 'text'], ['description', 'area'], ['rarity', 'sel', RARITIES], ['emoji', 'emoji'], ['brightness', 'bright'], ['tradable', 'chk'], ['collections', 'colls'], ['image_url', 'img']],
+  nameeffects: [['name', 'text'], ['description', 'area'], ['rarity', 'sel', RARITIES], ['name_fx', 'psel', ['none', 'glow', 'pulse', 'rainbow', 'shimmer']], ['name_color', 'pcol'], ['brightness', 'bright'], ['tradable', 'chk'], ['collections', 'colls'], ['image_url', 'img']],
+  otheritems: [['name', 'text'], ['description', 'area'], ['kind', 'sel', OTHER_KINDS], ['rarity', 'sel', RARITIES], ['side', 'sel', ['both', 'white', 'black']], ['brightness', 'bright'], ['tradable', 'chk'], ['collections', 'colls'], ['image_url', 'img']],
+  storage_defs: [['name', 'text'], ['description', 'area'], ['price', 'money'], ['capacity', 'int'], ['image_url', 'img']],
+  shop_items: [['item_id', 'item'], ['price', 'money']]
 };
-const TITLE = { items: 'item', collections: 'collection / case', operations: 'operation', shop_keys: 'shop key', cases: 'case', shop_cases: 'case for sale', news: 'news post (shown once to every player)', boards: 'board', flairs: 'flair', nameeffects: 'name effect', otheritems: 'item', storage_defs: 'storage container' };
-const rowName = r => r.name || r.title || (r.case_id ? nameOf(devCases, r.case_id) + (devTab === 'shop_keys' ? ' key' : '') : '');
+const TITLE = { items: 'item', collections: 'collection / case', operations: 'operation', shop_keys: 'shop key', cases: 'case', shop_cases: 'case for sale', news: 'news post (shown once to every player)', boards: 'board', flairs: 'flair', nameeffects: 'name effect', otheritems: 'item', storage_defs: 'storage container', shop_items: 'item for sale in the shop' };
+const rowName = r => r.name || r.title || (r.case_id ? nameOf(devCases, r.case_id) + (devTab === 'shop_keys' ? ' key' : '') : (devTab === 'shop_items' && r.item_id ? nameOf(devItems, r.item_id) : ''));
 let devOpen = false, devTab = 'items', devEdit = null, devRows = [], devItems = [], devColls = [], devCases = [], devIC = {};
 const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const LABELS = { reward_pawns: 'reward currency', cost_pawns: 'price (operation currency)', reward_xp: 'reward XP', xp_per_level: 'XP needed per level', max_level: 'number of levels', pass_price: 'pass price from the player balance (0 = free)', period: 'resets', level: 'reward at level', lasts_days: 'lasts (days from now)', tradable: 'can be traded on the market', coll_kind: 'this collection holds', capacity: 'how many items it holds' };
@@ -1036,7 +1051,7 @@ function formHtml(fields, cur, pfx) {
     if (type === 'chk') { f += '<label><input' + ida + ' type="checkbox"' + ((v == null ? k === 'tradable' : v) ? ' checked' : '') + '>' + lab(k) + '</label>'; continue; }
     if (type === 'emoji') {
       const ev = (cur.pattern_config || {}).emoji || '';
-      f += '<label for="dv_emoji">emoji flair (pick one, or leave empty and upload an image instead)</label><input id="dv_emoji" value="' + esc(ev) + '" maxlength="8" style="font-size:1.6rem;width:110px;text-align:center"><div style="display:flex;flex-wrap:wrap;gap:.1rem;max-height:150px;overflow:auto;margin-top:.4rem;background:#0d1a23;padding:.4rem;border-radius:6px">' +
+      f += '<label for="dv_emoji">emoji flair (pick one: it is saved as a picture, or leave empty and upload an image instead)</label><input id="dv_emoji" value="' + esc(ev) + '" maxlength="8" style="font-size:1.6rem;width:110px;text-align:center"><div style="display:flex;flex-wrap:wrap;gap:.1rem;max-height:150px;overflow:auto;margin-top:.4rem;background:#0d1a23;padding:.4rem;border-radius:6px">' +
         EMOJIS.map(e => '<button type="button" data-emoji="' + e + '" style="font-size:1.3rem;padding:.1rem .3rem;background:transparent;border:0;width:auto">' + e + '</button>').join('') + '</div>';
       continue;
     }
@@ -1066,9 +1081,14 @@ function formHtml(fields, cur, pfx) {
       f += '<label for="' + pfx + k + '">pattern sheet replaces</label><select id="' + pfx + k + '"><option value="whites"' + (v === 'all' ? '' : ' selected') + '>Only whites and grays</option><option value="all"' + (v === 'all' ? ' selected' : '') + '>Everything except black</option></select>';
       continue;
     }
-    if (type === 'patsheet') {
-      f += '<label for="' + pfx + k + '">pattern sheet (used when the pattern effect is "pattern sheet")</label><div class="drop" data-for="' + pfx + k + '">' + (v ? 'Sheet set. Drop a new one to replace it.' : 'Drop the pattern sheet here, or click') + '</div><input id="' + pfx + k + '" type="file" accept="image/*" hidden>' +
-        (v ? '<img src="' + esc(v) + '" alt="" style="height:48px;margin-top:.4rem">' : '');
+    if (type === 'sheets') {
+      const pc = cur.pattern_config || {}, list = (pc.sheets && pc.sheets.length) ? pc.sheets : (pc.sheet_url ? [{ url: pc.sheet_url, from: 1, to: 999, weight: 1 }] : []);
+      f += '<label>pattern sheets: add several and choose which pattern numbers use which (or give them chances). Players never see that there is more than one.</label><div id="sheetRows">' + list.map(sheetRowHtml).join('') + '</div><div class="btns" style="margin-top:.4rem"><button type="button" data-sheetadd="1">Add a sheet</button></div>';
+      continue;
+    }
+    if (type === 'zoom') {
+      const pc = cur.pattern_config || {};
+      f += '<label>cutout size: how zoomed in the pattern is, as a % of the piece width (lower shows more of the sheet, higher is a closer-up cutout)</label><div style="display:flex;gap:.5rem"><div style="flex:1"><small style="color:var(--mute)">smallest zoom</small><input id="dv_zmin" type="number" min="50" max="3000" step="10" value="' + (pc.zoom_min || 300) + '"></div><div style="flex:1"><small style="color:var(--mute)">biggest zoom</small><input id="dv_zmax" type="number" min="50" max="3000" step="10" value="' + (pc.zoom_max || 800) + '"></div></div>';
       continue;
     }
     if (type === 'range') {
@@ -1079,8 +1099,10 @@ function formHtml(fields, cur, pfx) {
     }
     if (type === 'pscr') { f += '<label><input' + ida + ' type="checkbox"' + (v ? ' checked' : '') + '>allow scratches on black parts</label>'; continue; }
     if (type === 'setimgs') {
-      f += '<label>set piece images (only used when type is "set")</label>' + PIECES.map(pc => '<label for="' + pfx + 'setimg_' + pc + '" style="margin-top:.2rem">' + pc + '</label><div class="drop" data-for="' + pfx + 'setimg_' + pc + '">' +
-        ((v || {})[pc] ? 'Image set. Drop a new one to replace it.' : 'Drop an image here, or click') + '</div><input id="' + pfx + 'setimg_' + pc + '" type="file" accept="image/*" hidden>').join('');
+      const sv = v || {}, bv = sv.black || {};
+      const zones = (pre, src, lab2) => '<b style="display:block;margin-top:.5rem">' + lab2 + '</b>' + PIECES.map(pc => '<label for="' + pfx + 'setimg_' + pre + pc + '" style="margin-top:.2rem">' + pc + '</label><div class="drop" data-for="' + pfx + 'setimg_' + pre + pc + '">' +
+        (src[pc] ? 'Image set. Drop a new one to replace it.' : 'Drop an image here, or click') + '</div><input id="' + pfx + 'setimg_' + pre + pc + '" type="file" accept="image/*" hidden>').join('');
+      f += '<label>set piece images (only used when type is "set")</label>' + zones('', sv, 'White pieces') + zones('b_', bv, 'Black pieces (optional: if you leave these empty, the white images are used for black too)');
       continue;
     }
     f += '<label for="' + id + '">' + lab(k) + (type === 'num' ? ' (0 to 1)' : '') + '</label>';
@@ -1131,7 +1153,7 @@ async function collect(fields, cur, pfx) {
     if (type === 'chk') row[k] = el.checked;
     else if (type === 'num') row[k] = Math.min(1, Math.max(0, el.value === '' ? 1 : Number(el.value)));
     else if (type === 'dur') row[k] = Math.max(0, Number(el.value) || 0);
-    else if (type === 'emoji') row.pattern_config = Object.assign({}, row.pattern_config, { emoji: el.value.trim() });
+    else if (type === 'emoji') { const em = el.value.trim(); if (em) row._emojiUrl = await devUpload(await emojiToFile(em), true); row.pattern_config = Object.assign({}, row.pattern_config, { emoji: '' }); }
     else if (type === 'colls') row._colls = [...document.querySelectorAll('.dv_colls:checked')].map(x => x.value);
     else if (type === 'sndkit') {
       const o = Object.assign({}, (cur.pattern_config || {}).sounds || {});
@@ -1142,19 +1164,31 @@ async function collect(fields, cur, pfx) {
     else if (type === 'bright') row.pattern_config = Object.assign({}, row.pattern_config, { brightness: Number(el.value) });
     else if (type === 'pcharm') row.pattern_config = Object.assign({}, row.pattern_config, { allow_charms: el.checked });
     else if (type === 'psmode') row.pattern_config = Object.assign({}, row.pattern_config, { sheet_mode: el.value });
-    else if (type === 'patsheet') { const sf = el.files[0]; row.pattern_config = Object.assign({}, row.pattern_config, { sheet_url: sf ? await devUpload(sf, false) : (cur.pattern_config || {}).sheet_url || null }); }
+    else if (type === 'sheets') {
+      const out = [];
+      for (const rw of document.querySelectorAll('.sheetrow')) {
+        const i = rw.dataset.i, fi = $('dv_sh_' + i), url = fi && fi.files[0] ? await devUpload(fi.files[0], false) : rw.dataset.url;
+        if (url) out.push({ url, from: Number($('dv_shf_' + i).value) || 1, to: Number($('dv_sht_' + i).value) || 999, weight: Number($('dv_shw_' + i).value) || 0 });
+      }
+      row.pattern_config = Object.assign({}, row.pattern_config, { sheets: out, sheet_url: out[0] ? out[0].url : null });
+    }
+    else if (type === 'zoom') row.pattern_config = Object.assign({}, row.pattern_config, { zoom_min: Number($('dv_zmin').value) || 300, zoom_max: Number($('dv_zmax').value) || 800 });
     else if (type === 'range') { row.wear_min = Number($(pfx + 'wear_min').value); row.wear_max = Number($(pfx + 'wear_max').value); row.wear_cap = Math.max(0.01, row.wear_max); }
     else if (type === 'pcfg') row.pattern_config = Object.assign({}, row.pattern_config, { effect: el.value.trim() });
     else if (type === 'pscr') row.pattern_config = Object.assign({}, row.pattern_config, { scratch_black: el.checked });
     else if (type === 'setimgs') {
-      const o = Object.assign({}, cur.set_images || {});
-      for (const pc of PIECES) { const fi = $(pfx + 'setimg_' + pc); if (fi && fi.files[0]) o[pc] = await devUpload(fi.files[0], true); }
+      const o = Object.assign({}, cur.set_images || {}), ob = Object.assign({}, o.black || {});
+      for (const pc of PIECES) {
+        const fi = $(pfx + 'setimg_' + pc); if (fi && fi.files[0]) o[pc] = await devUpload(fi.files[0], true);
+        const fb = $(pfx + 'setimg_b_' + pc); if (fb && fb.files[0]) ob[pc] = await devUpload(fb.files[0], true);
+      }
+      if (Object.keys(ob).length) o.black = ob;
       row.set_images = o;
     }
     else if (type === 'money') row[k] = Math.max(0, Number(el.value) || 0);
     else if (type === 'int') row[k] = Math.max(['goal', 'max_level', 'xp_per_level', 'level', 'capacity'].includes(k) ? 1 : 0, Math.floor(Number(el.value) || 0));
     else if (type === 'coll' || type === 'item' || type === 'case') row[k] = el.value || null;
-    else if (type === 'img') row[k] = el.files[0] ? await devUpload(el.files[0], devTab === 'items' && ($('dv_kind') || {}).value === 'piece') : (cur[k] || null);
+    else if (type === 'img') row[k] = el.files[0] ? await devUpload(el.files[0], devTab === 'items' && ($('dv_kind') || {}).value === 'piece') : (row._emojiUrl || cur[k] || null);
     else row[k] = el.value.trim();
   }
   return row;
@@ -1177,7 +1211,7 @@ async function devMoney() {
 }
 async function devRender() {
   if (!devOpen) return;
-  for (const [id, t] of [['dvTabItems', 'items'], ['dvTabColls', 'collections'], ['dvTabOps', 'operations'], ['dvTabShop', 'shop_keys'], ['dvTabCases', 'cases'], ['dvTabShopC', 'shop_cases'], ['dvTabMoney', 'money'], ['dvTabNews', 'news'], ['dvTabPuz', 'puzzles'], ['dvTabWk', 'weekly'], ['dvTabMed', 'medals'], ['dvTabSnd', 'sounds'], ['dvTabSet', 'settings'], ['dvTabBoards', 'boards'], ['dvTabFlairs', 'flairs'], ['dvTabNfx', 'nameeffects'], ['dvTabOther', 'otheritems'], ['dvTabStore', 'storage_defs']]) $(id).className = devTab === t ? 'primary' : '';
+  for (const [id, t] of [['dvTabItems', 'items'], ['dvTabColls', 'collections'], ['dvTabOps', 'operations'], ['dvTabShop', 'shop_keys'], ['dvTabCases', 'cases'], ['dvTabShopC', 'shop_cases'], ['dvTabMoney', 'money'], ['dvTabNews', 'news'], ['dvTabPuz', 'puzzles'], ['dvTabWk', 'weekly'], ['dvTabMed', 'medals'], ['dvTabSnd', 'sounds'], ['dvTabSet', 'settings'], ['dvTabBoards', 'boards'], ['dvTabFlairs', 'flairs'], ['dvTabNfx', 'nameeffects'], ['dvTabOther', 'otheritems'], ['dvTabStore', 'storage_defs'], ['dvTabShopI', 'shop_items']]) $(id).className = devTab === t ? 'primary' : '';
   if (devTab === 'money') return devMoney();
   if (devTab === 'puzzles') return devPuzzles();
   if (devTab === 'weekly') return devWeekly();
@@ -1218,11 +1252,13 @@ async function devRender() {
       '<div style="margin-top:.8rem"><b>Add a tile</b>' + formHtml(F.operation_shop, {}, 'sh_') + '<div class="btns" style="margin-top:.6rem"><button class="primary" data-act="adds">Add to shop</button></div></div></div>';
   } else if (devTab === 'operations') h += '<p style="color:var(--mute)">Create the operation first, then its quests, level rewards and shop appear here.</p>';
   h += '<hr style="border-color:var(--line);margin:1.2rem 0"><b>' + devRows.length + ' existing</b>' + devRows.map(r => '<div class="li">' + (r.image_url ? '<img src="' + esc(r.image_url) + '" alt="">' : '') +
-    '<div><b>' + esc(rowName(r)) + '</b><br><small>' + esc(isItemTab(devTab) ? r.kind + ' · ' + r.rarity + ' · ' + r.side : devTab === 'storage_defs' ? '$' + Number(r.price).toFixed(2) + ' · holds ' + r.capacity + ' items' : devTab === 'collections' ? (r.is_active_drop ? 'weekly drop' : 'collection') : devTab === 'news' ? new Date(r.created_at).toLocaleString() : devTab === 'cases' ? 'holds: ' + nameOf(devColls, r.collection_id) + (r.allow_gold ? '' : ' (no gold)') : (devTab === 'shop_keys' || devTab === 'shop_cases') ? '$' + Number(r.price).toFixed(2) : r.currency_piece + ' · ends ' + new Date(r.ends_at).toLocaleString()) + '</small></div>' +
+    '<div><b>' + esc(rowName(r)) + '</b><br><small>' + esc(isItemTab(devTab) ? r.kind + ' · ' + r.rarity + ' · ' + r.side : devTab === 'storage_defs' ? '$' + Number(r.price).toFixed(2) + ' · holds ' + r.capacity + ' items' : devTab === 'collections' ? (r.is_active_drop ? 'weekly drop' : 'collection') : devTab === 'news' ? new Date(r.created_at).toLocaleString() : devTab === 'cases' ? 'holds: ' + nameOf(devColls, r.collection_id) + (r.allow_gold ? '' : ' (no gold)') : (devTab === 'shop_keys' || devTab === 'shop_cases' || devTab === 'shop_items') ? '$' + Number(r.price).toFixed(2) : r.currency_piece + ' · ends ' + new Date(r.ends_at).toLocaleString()) + '</small></div>' +
     '<button data-act="edit" data-id="' + r.id + '">Edit</button><button data-act="del" data-id="' + r.id + '">Delete</button></div>').join('');
   $('devBody').innerHTML = h;
 }
 $('devBody').addEventListener('click', async e => {
+  const sa = e.target.closest('[data-sheetadd]'); if (sa) { $('sheetRows').insertAdjacentHTML('beforeend', sheetRowHtml({})); return; }
+  const sd = e.target.closest('[data-sheetdel]'); if (sd) { sd.closest('.sheetrow').remove(); return; }
   const emo = e.target.closest('[data-emoji]'); if (emo) { $('dv_emoji').value = emo.dataset.emoji; return; }
   const pl = e.target.closest('[data-playsnd]'); if (pl) { e.preventDefault(); try { new Audio(pl.dataset.playsnd).play(); } catch (x) { /* ignore */ } return; }
   const dz = e.target.closest('.drop'); if (dz) { $(dz.dataset.for).click(); return; }
@@ -1331,13 +1367,13 @@ $('devBody').addEventListener('click', async e => {
       devMsg('Deleted.'); return devRender();
     }
     if (a === 'save') {
-      const row = await collect(F[devTab], devEdit || {}, 'dv_');
+      const row = await collect(F[devTab], devEdit || {}, 'dv_'); delete row._emojiUrl;
       if (isItemTab(devTab)) {
         if (TAB_KIND[devTab]) row.kind = TAB_KIND[devTab];
         if (!devEdit) Object.assign(row, Object.assign({ piece: 'pawn', side: 'both', wear_cap: 1, wear_min: 0, wear_max: 0, is_pattern_based: false, is_default: false }, row));
         if (row.pattern_config) row.pattern_config = Object.assign({}, (devEdit && devEdit.pattern_config) || {}, row.pattern_config);
       }
-      if (devTab === 'shop_keys' || devTab === 'shop_cases') { if (!row.case_id || !(row.price > 0)) throw new Error('Pick a case and a price.'); }
+      if (devTab === 'shop_keys' || devTab === 'shop_cases' || devTab === 'shop_items') { if (!(devTab === 'shop_items' ? row.item_id : row.case_id) || !(row.price > 0)) throw new Error(devTab === 'shop_items' ? 'Pick an item and a price.' : 'Pick a case and a price.'); }
       else if (!(row.name || row.title)) throw new Error('Give it a name first.');
       if (devTab === 'operations') {
         const d = row.lasts_days; delete row.lasts_days;
@@ -1522,24 +1558,27 @@ $('opsView').addEventListener('click', async e => {
   setTimeout(() => { if (view.startsWith('op:')) opRender(view.slice(3)); }, 500);
 });
 async function shopRender() {
-  const [sc, sk, cs, sd] = await Promise.all([db.from('shop_cases').select('*').order('created_at'), db.from('shop_keys').select('*').order('created_at'), db.from('cases').select('*'), db.from('storage_defs').select('*').order('created_at')]);
+  const [sc, sk, cs, sd, shi, shitems] = await Promise.all([db.from('shop_cases').select('*').order('created_at'), db.from('shop_keys').select('*').order('created_at'), db.from('cases').select('*'), db.from('storage_defs').select('*').order('created_at'), db.from('shop_items').select('*').order('created_at'), db.from('items').select('*')]);
   if (view !== 'shop') return;
+  window.shopItems = shitems.data || [];
   const cname = id => { const c = (cs.data || []).find(x => x.id === id); return c ? c.name : '?'; };
   const im = u => u ? '<img src="' + esc(u) + '" alt="" draggable="false" style="height:56px;width:56px;object-fit:contain">' : '';
   const cobj = id => (cs.data || []).find(x => x.id === id) || {};
   const card = (kind, r, title, sub, img) => '<div class="op"><div class="row2"><div style="display:flex;gap:.8rem;align-items:center">' + (img || '') + '<div><h3>' + esc(title) + '</h3><div style="color:var(--mute)">' + esc(sub) + '</div></div></div>' +
     '<button class="primary" data-buy="' + r.id + '" data-kind="' + kind + '">Buy for $' + Number(r.price).toFixed(2) + '</button></div></div>';
   const cases = (sc.data || []).map(r => card('case', r, cname(r.case_id), 'A case. You also need a ' + cname(r.case_id) + ' key to open it.', im(cobj(r.case_id).image_url))).join('');
+  const itemCards = (shi.data || []).map(r => { const it = (shitems.data || []).find(x => x.id === r.item_id); return it ? card('item', r, it.name, it.rarity + ' · ' + (it.kind || 'item'), '<div style="width:56px;text-align:center">' + itemImg(it, 1, 52, 0.2) + '</div>') : ''; }).join('');
   const storage = (sd.data || []).map(r => card('storage', r, r.name, 'Holds up to ' + r.capacity + ' items. Items inside are safe from trading and trade-ups.', im(r.image_url))).join('');
   const keys = (sk.data || []).map(r => card('key', r, cname(r.case_id) + ' Key', 'Opens a ' + cname(r.case_id) + ' case.', im(cobj(r.case_id).key_image_url || cobj(r.case_id).image_url))).join('');
-  $('shopView').innerHTML = '<h2 style="margin-bottom:1rem">Shop</h2>' + (cases || keys || storage ? (cases ? '<h3>Cases</h3>' + cases : '') + (keys ? '<h3 style="margin-top:1rem">Keys</h3>' + keys : '') + (storage ? '<h3 style="margin-top:1rem">Storage containers</h3>' + storage : '') : '<p style="color:var(--mute)">Nothing for sale yet.</p>');
+  $('shopView').innerHTML = '<h2 style="margin-bottom:1rem">Shop</h2>' + (cases || keys || storage || itemCards ? (itemCards ? '<h3>Items</h3>' + itemCards : '') + (cases ? '<h3>Cases</h3>' + cases : '') + (keys ? '<h3 style="margin-top:1rem">Keys</h3>' + keys : '') + (storage ? '<h3 style="margin-top:1rem">Storage containers</h3>' + storage : '') : '<p style="color:var(--mute)">Nothing for sale yet.</p>');
 }
 $('shopView').addEventListener('click', async e => {
   const b = e.target.closest('[data-buy]'); if (!b) return;
   const label = b.textContent; b.disabled = true;
-  const { error } = await (b.dataset.kind === 'storage' ? db.rpc('buy_storage', { p_def: b.dataset.buy }) : db.rpc(b.dataset.kind === 'case' ? 'buy_case' : 'buy_key', { p_listing: b.dataset.buy }));
+  const { data: bought, error } = await (b.dataset.kind === 'item' ? db.rpc('buy_shop_item', { p_listing: b.dataset.buy }) : b.dataset.kind === 'storage' ? db.rpc('buy_storage', { p_def: b.dataset.buy }) : db.rpc(b.dataset.kind === 'case' ? 'buy_case' : 'buy_key', { p_listing: b.dataset.buy }));
   if (error) { b.disabled = false; return showErr(error.message); }
   const ses = await db.auth.getSession(); if (ses.data.session) loadProfile(ses.data.session.user.id);
+  if (b.dataset.kind === 'item' && bought) { const bi = (window.shopItems || []).find(x => x.id === bought.item_id); if (bi) inspect(bi, Number(bought.wear), bought.pattern_seed, 'You bought:'); loadLoadouts(); }
   b.textContent = 'Bought!'; playSound('purchase');
   setTimeout(() => { b.textContent = label; b.disabled = false; }, 500);
 });
@@ -1585,6 +1624,16 @@ function whiteMask(url) {
   im.src = url;
   return null;
 }
+// With several sheets, the pattern number decides which one (by its range, then by chance) and it is always the same for that number.
+function pickSheet(sheets, seed) {
+  const n = Math.max(1, seed || 1);
+  let c = sheets.filter(x => n >= (x.from || 1) && n <= (x.to || 999));
+  if (!c.length) c = sheets;
+  if (c.length === 1) return c[0];
+  const anyW = c.some(y => Number(y.weight) > 0), w = x => anyW ? (Number(x.weight) || 0) : 1, tot = c.reduce((a, x) => a + w(x), 0), r = prng(n + 7919)() * tot;
+  let acc = 0; for (const x of c) { acc += w(x); if (r < acc) return x; }
+  return c[c.length - 1];
+}
 // Same seed = same cut-out of the sheet, every time, on every device.
 function prng(seed) {
   let a = (Math.max(1, seed || 1) * 2654435761) >>> 0;
@@ -1594,7 +1643,7 @@ function prng(seed) {
 // Scratches use multiply, so they never show on black parts, unless the item allows scratching black parts.
 function itemImg(it, seed, h, wear) {
   const w = Math.max(0, Math.min(1, Number(wear) || 0)), p = patParts(it, seed), hh = typeof h === 'number' ? h + 'px' : h;
-  const pcfg = (it.is_pattern_based && it.pattern_config) || {}, sheetOn = pcfg.effect === 'pattern sheet' && pcfg.sheet_url, filt = (sheetOn && pcfg.sheet_mode === 'all' ? 'brightness(18) ' : '') + (p.f ? p.f + ' ' : '') + ((it.pattern_config && it.pattern_config.brightness && it.pattern_config.brightness !== 1) ? 'brightness(' + it.pattern_config.brightness + ') ' : '') + 'saturate(' + (1 - 0.55 * w).toFixed(2) + ') brightness(' + (1 - 0.3 * w).toFixed(2) + ') contrast(' + (1 - 0.15 * w).toFixed(2) + ')';
+  const pcfg = (it.is_pattern_based && it.pattern_config) || {}, shs = pcfg.sheets && pcfg.sheets.length ? pcfg.sheets : (pcfg.sheet_url ? [{ url: pcfg.sheet_url, from: 1, to: 999, weight: 1 }] : []), sheetOn = pcfg.effect === 'pattern sheet' && shs.length > 0, filt = (sheetOn && pcfg.sheet_mode === 'all' ? 'brightness(18) ' : '') + (p.f ? p.f + ' ' : '') + ((it.pattern_config && it.pattern_config.brightness && it.pattern_config.brightness !== 1) ? 'brightness(' + it.pattern_config.brightness + ') ' : '') + 'saturate(' + (1 - 0.55 * w).toFixed(2) + ') brightness(' + (1 - 0.3 * w).toFixed(2) + ') contrast(' + (1 - 0.15 * w).toFixed(2) + ')';
   const tf = p.t ? 'transform:' + p.t + ';' : '';
   const iu = it.image_url || (it.set_images && (it.set_images.pawn || Object.values(it.set_images)[0]));
   if (!iu && it.pattern_config && it.pattern_config.emoji) return '<div style="height:' + hh + ';display:grid;place-items:center;font-size:' + (typeof h === 'number' ? h * 0.7 : 40) + 'px;line-height:1">' + esc(it.pattern_config.emoji) + '</div>';
@@ -1608,8 +1657,8 @@ function itemImg(it, seed, h, wear) {
   if (sheetOn) {
     const wm = pc.sheet_mode === 'all' ? null : whiteMask(iu);
     const smask = wm ? "-webkit-mask:url('" + wm + "') center/contain no-repeat;mask:url('" + wm + "') center/contain no-repeat;" : mask;
-    const rn = prng(seed), rot = Math.round(rn() * 360), sz = Math.round(150 + rn() * 250), px = Math.round(rn() * 100), py = Math.round(rn() * 100);
-    sheet = '<span style="position:absolute;inset:0;overflow:hidden;pointer-events:none;mix-blend-mode:multiply;' + smask + '"><span style="position:absolute;inset:-50%;transform:rotate(' + rot + 'deg);background:url(\'' + esc(pc.sheet_url) + '\') ' + px + '% ' + py + '%/' + sz + '% auto repeat"></span></span>';
+    const rn = prng(seed), rot = Math.round(rn() * 360), sz = Math.round(((pc.zoom_min || 300) + rn() * ((pc.zoom_max || 800) - (pc.zoom_min || 300))) / 2), px = Math.round(rn() * 100), py = Math.round(rn() * 100);
+    sheet = '<span style="position:absolute;inset:0;overflow:hidden;pointer-events:none;mix-blend-mode:multiply;' + smask + '"><span style="position:absolute;inset:-50%;transform:rotate(' + rot + 'deg);background:url(\'' + esc(pickSheet(shs, seed).url) + '\') ' + px + '% ' + py + '%/' + sz + '% auto repeat"></span></span>';
   }
   return '<span style="position:relative;display:inline-block;line-height:0;' + tf + '"><img src="' + u + '" alt="" draggable="false" style="-webkit-user-drag:none;user-select:none;pointer-events:none;height:' + hh + ';max-width:100%;object-fit:contain;filter:' + filt + '">' + sheet +
     (w > 0.02 ? '<span class="wearov' + lt + '" style="' + mask + 'opacity:' + Math.min(0.9, w * 1.15).toFixed(2) + '"></span>' : '') + '</span>';
@@ -1742,7 +1791,7 @@ function buildEq() {
   for (const side of ['white', 'black']) {
     const bd = get(side + '_board'); if (bd) eqBoard[side] = bd.it;
     const st = get(side + '_set');
-    if (st) { for (const k of SLOT_KEYS) { const u = (st.it.set_images || {})[k.split('_')[0]]; if (u) eq[side][k] = { item: Object.assign({}, st.it, { image_url: u }), seed: st.r.pattern_seed, wear: st.r.wear }; } continue; }
+    if (st) { for (const k of SLOT_KEYS) { const si = st.it.set_images || {}, ty = k.split('_')[0], u = side === 'black' ? ((si.black || {})[ty] || si[ty]) : si[ty]; if (u) eq[side][k] = { item: Object.assign({}, st.it, { image_url: u }), seed: st.r.pattern_seed, wear: st.r.wear }; } continue; }
     for (const k of SLOT_KEYS) { const g = get(side + '_' + k); if (g && g.it.image_url) eq[side][k] = { item: g.it, seed: g.r.pattern_seed, wear: g.r.wear }; }
   }
   const fl = get('flair'), nm = get('name_effect'); eqFlair = fl ? fl.it : null; eqName = nm ? nm.it : null; const sk = get('sound_kit'); eqSound = sk ? sk.it : null;
@@ -2575,7 +2624,7 @@ async function mkOverview() {
   $('mkView').innerHTML = '<div class="row2" style="margin-bottom:.8rem"><h2>Market</h2>' + (devAdmin ? '<button data-mkset="1">Market settings</button>' : '') + '</div>' +
     '<div class="btns" style="margin-bottom:.8rem"><input id="mkQ" placeholder="Search items" style="max-width:240px"><select id="mkSort" style="max-width:190px"><option value="name">Name</option><option value="low">Lowest price first</option><option value="high">Highest price first</option><option value="qty">Most for sale</option></select>' +
     '<select id="mkRar" style="max-width:170px"><option value="">All rarities</option>' + RARITIES.map(r => '<option>' + r + '</option>').join('') + '</select></div>' +
-    (mine.length ? '<details style="margin-bottom:1rem"><summary style="cursor:pointer"><b>Your listings (' + mine.length + ')</b></summary>' + mine.map(m => '<div class="li"><div style="width:40px;text-align:center">' + itemImg(m.item, m.pattern_seed, 34, m.wear) + '</div><div><b>' + esc(m.item.name) + '</b><br><small>' + COND(Number(m.wear)) + ' · ' + money(m.price) + '</small></div><button data-cancel="' + m.id + '">Take back</button></div>').join('') + '</details>' : '') +
+    (mine.length ? '<details style="margin-bottom:1rem"><summary style="cursor:pointer"><b>Your listings (' + mine.length + ')</b></summary>' + mine.map(m => '<div class="li"><div style="width:40px;text-align:center">' + mkImg(m.item, 34, m.wear, m.pattern_seed) + '</div><div><b>' + esc(m.item.name) + '</b><br><small>' + COND(Number(m.wear)) + ' · ' + money(m.price) + '</small></div><button data-cancel="' + m.id + '">Take back</button></div>').join('') + '</details>' : '') +
     '<div class="grid" id="mkGrid" style="grid-template-columns:repeat(auto-fill,minmax(165px,1fr))"></div>';
   mkGridDraw();
 }
@@ -2584,17 +2633,18 @@ function mkGridDraw() {
   const list = mkList.filter(i => (!q || String(i.name).toLowerCase().includes(q)) && (!rar || i.rarity === rar));
   const lo = i => i.low == null ? 1e12 : Number(i.low);
   list.sort((a, b) => sort === 'low' ? lo(a) - lo(b) : sort === 'high' ? (b.low == null ? -1 : Number(b.low)) - (a.low == null ? -1 : Number(a.low)) : sort === 'qty' ? b.qty - a.qty : String(a.name).localeCompare(b.name));
-  $('mkGrid').innerHTML = list.map(i => '<div class="card2" data-mk="' + i.id + '" style="cursor:pointer;' + (i.on_market ? '' : 'opacity:.5') + '"><div class="cin"><div class="cimg">' + itemImg(i, 1, 84, 0) + '</div><b>' + esc(i.name) +
+  $('mkGrid').innerHTML = list.map(i => '<div class="card2" data-mk="' + i.id + '" style="cursor:pointer;' + (i.on_market ? '' : 'opacity:.5') + '"><div class="cin"><div class="cimg">' + mkImg(i, 84, 0) + '</div><b>' + esc(i.name) +
     '</b><small style="color:' + (RCOL[i.rarity] || '#fff') + ';display:block">' + esc(i.rarity) + '</small>' +
     (i.on_market ? '<div style="margin-top:.3rem">' + (i.low != null ? 'From <b>' + money(i.low) + '</b>' : 'None for sale') + '</div><small style="color:var(--mute);display:block">' + i.qty + ' for sale · market ' + money(i.price) + '</small>' : '<small style="color:var(--gold);display:block;margin-top:.3rem">' + (i.tradable === false ? 'Untradeable' : 'Not on the market yet') + '</small>') +
     '</div><div class="rbar" style="background:' + (RCOL[i.rarity] || RCOL.gray) + '"></div></div>').join('') || '<p style="color:var(--mute)">Nothing here yet.</p>';
 }
-function mkChart(series, sales) {
+const mkImg = (it, h, wear, seed) => it.is_case ? (it.image_url ? '<img src="' + esc(it.image_url) + '" alt="" draggable="false" style="max-height:' + h + 'px;max-width:100%;object-fit:contain">' : '<div class="boxph" style="font-size:' + h * 0.8 + 'px">▣</div>') : itemImg(it, seed || 1, h, wear);
+function mkChart(series, sales, single) {
   const W = 700, H = 300, L = 56, R = 12, T = 12, B = 70;
   const pts = (series || []).filter(p => p[1] != null);
   if (pts.length < 2) return '<p style="color:var(--mute)">No price history yet.</p>';
   const t0 = pts[0][0], t1 = pts[pts.length - 1][0];
-  const lines = CONDS.map((c, i) => ({ c, col: CCOL[i], p: pts.map(([t, p]) => [t, p * (mkCfg.wear_mult[c] || 1)]) }));
+  const lines = single ? [{ c: 'Price', col: '#f0b429', p: pts }] : CONDS.map((c, i) => ({ c, col: CCOL[i], p: pts.map(([t, p]) => [t, p * (mkCfg.wear_mult[c] || 1)]) }));
   let lo = Infinity, hi = 0; lines.forEach(l => l.p.forEach(([, p]) => { lo = Math.min(lo, p); hi = Math.max(hi, p); }));
   const pad = (hi - lo) * 0.08 || hi * 0.1 || 1; lo = Math.max(0, lo - pad); hi += pad;
   const x = t => L + (W - L - R) * (t - t0) / ((t1 - t0) || 1), y = p => T + (H - T - B) * (1 - (p - lo) / (hi - lo));
@@ -2607,7 +2657,7 @@ function mkChart(series, sales) {
   g += '<text x="' + L + '" y="' + (H - 2) + '" fill="#8da2b0" font-size="10">sold per day</text>';
   lines.forEach(l => { g += '<polyline fill="none" stroke="' + l.col + '" stroke-width="1.6" points="' + l.p.map(([t, p]) => x(t).toFixed(1) + ',' + y(p).toFixed(1)).join(' ') + '"/>'; });
   return '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;background:#0d1a23;border:1px solid var(--line);border-radius:8px">' + g + '</svg>' +
-    '<div style="display:flex;gap:.9rem;flex-wrap:wrap;margin-top:.4rem;font-size:.8rem">' + CONDS.map((c, i) => '<span><span style="color:' + CCOL[i] + '">●</span> ' + c + '</span>').join('') + '</div>';
+    '<div style="display:flex;gap:.9rem;flex-wrap:wrap;margin-top:.4rem;font-size:.8rem">' + (single ? [] : CONDS).map((c, i) => '<span><span style="color:' + CCOL[i] + '">●</span> ' + c + '</span>').join('') + '</div>';
 }
 async function mkItemRender() {
   const id = mkItemId;
@@ -2617,9 +2667,16 @@ async function mkItemRender() {
   const d = v.data, it = d.item, ls = d.listings || [], sold = d.sold || {}, fee = mkCfg.fee;
   const tbl = CONDS.map((c, i) => { const l = ls.filter(x => COND(Number(x.wear)) === c), lo = l.length ? Math.min(...l.map(x => Number(x.price))) : null, st = sold[c] || {};
     return '<tr><td><span style="color:' + CCOL[i] + '">●</span> ' + c + '</td><td>×' + (mkCfg.wear_mult[c] || 1) + '</td><td>' + (lo != null ? money(lo) : '-') + '</td><td>' + l.length + '</td><td>' + (st.d1 || 0) + '</td><td>' + (st.d7 || 0) + '</td><td>' + (st.d30 || 0) + '</td></tr>'; }).join('');
-  const shown = ls.filter(x => !mkCondSel || COND(Number(x.wear)) === mkCondSel);
-  const listings = shown.map(x => '<tr data-linspect="' + x.id + '" style="cursor:pointer"><td>' + COND(Number(x.wear)) + '</td><td>' + Number(x.wear).toFixed(6) + '</td><td>' + (it.is_pattern_based ? '#' + (x.seed || 1) : '-') + '</td><td><b>' + money(x.price) + '</b></td><td>' +
-    (x.mine ? '<button data-cancel="' + x.id + '">Take back</button>' : '<button class="primary" data-buy="' + x.id + '" data-price="' + x.price + '">Buy</button>') + '</td></tr>').join('');
+  const isCase = !!it.is_case, cm = d.case_mine || {};
+  const shown = isCase ? ls : ls.filter(x => !mkCondSel || COND(Number(x.wear)) === mkCondSel);
+  const mineCase = isCase && cm.qty > 0 ? '<div class="li"><div style="flex:1"><b>You own ' + cm.qty + '</b><br><small style="color:var(--mute)">Fair price ' + money(cm.fair) + '</small></div>' + (cm.instant != null ? '<button data-sellnowcase="1">Sell one now ' + money(cm.instant) + '</button>' : '') +
+    '<input id="mkpc" type="number" min="0.03" step="0.01" value="' + Number(cm.fair).toFixed(2) + '" style="width:92px"><button class="primary" data-listcase="1">List one</button></div>' : '';
+  const gold = d.has_gold ? '<div class="card2"><div class="cin"><div class="cimg"><div class="boxph" style="color:#f0b429">★</div></div><b>Rare Special Item</b><small style="color:#f0b429;display:block">gold</small></div><div class="rbar" style="background:#f0b429"></div></div>' : '';
+  const caseContents = isCase ? '<div class="op"><b>Inside this case</b><p style="color:var(--mute);font-size:.85rem;margin:.2rem 0 .5rem">Every skin it can hold, from the most common to the rarest.</p><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(120px,1fr))">' +
+    (d.contents || []).map(i => '<div class="card2"><div class="cin"><div class="cimg">' + itemImg(i, 1, 70, 0) + '</div><b>' + esc(i.name) + '</b><small style="color:' + (RCOL[i.rarity] || '#fff') + ';display:block">' + esc(i.rarity) + '</small></div><div class="rbar" style="background:' + (RCOL[i.rarity] || RCOL.gray) + '"></div></div>').join('') + gold + '</div></div>' : '';
+  const buyBtn = x => x.mine ? '<button data-cancel="' + x.id + '">Take back</button>' : '<button class="primary" data-buy="' + x.id + '" data-price="' + x.price + '">Buy</button>';
+  const listings = shown.map(x => isCase ? '<tr><td><b>' + money(x.price) + '</b></td><td>' + buyBtn(x) + '</td></tr>' :
+    '<tr data-linspect="' + x.id + '" style="cursor:pointer"><td>' + COND(Number(x.wear)) + '</td><td>' + Number(x.wear).toFixed(6) + '</td><td>' + (it.is_pattern_based ? '#' + (x.seed || 1) : '-') + '</td><td><b>' + money(x.price) + '</b></td><td>' + buyBtn(x) + '</td></tr>').join('');
   const mine = (d.mine || []).map(m => '<div class="li"><div style="width:44px;text-align:center">' + itemImg(it, m.seed, 38, m.wear) + '</div><div style="flex:1"><b>' + COND(Number(m.wear)) + '</b> <small>' + Number(m.wear).toFixed(6) + (it.is_pattern_based ? ' · #' + (m.seed || 1) : '') + '</small><br><small style="color:var(--mute)">Fair price ' + money(m.fair) + '</small></div>' +
     (m.instant != null ? '<button data-sellnow="' + m.inventory_id + '">Sell now ' + money(m.instant) + '</button>' : '') + '<input id="mkp_' + m.inventory_id + '" type="number" min="0.03" step="0.01" value="' + Number(m.fair).toFixed(2) + '" style="width:92px"><button class="primary" data-list="' + m.inventory_id + '">List</button></div>').join('');
   let adm = '';
@@ -2640,7 +2697,7 @@ async function mkItemRender() {
       '<div><label>Bots sell at (% of fair price)</label><input id="mk_markup" type="number" min="50" max="300" step="1" value="' + Math.round((mi.sell_markup == null ? 1.04 : mi.sell_markup) * 100) + '"></div></div>' +
       '<div class="btns" style="margin-top:.6rem"><button data-mkadm="bots">Save bot settings</button></div>' +
       '<hr style="border-color:var(--line);margin:.9rem 0"><b>Pattern overpay</b><p style="color:var(--mute);font-size:.8rem;margin:.2rem 0">Special pattern numbers sell for more. A range of pattern numbers gets a price multiplier.</p>' +
-      ((a.overpay || []).map(o => '<div class="li"><div><b>#' + o.seed_from + (o.seed_to !== o.seed_from ? ' to #' + o.seed_to : '') + '</b> × ' + o.multiplier + '<br><small>' + esc(o.note) + '</small></div><button data-mkadm="opdel" data-id="' + o.id + '">Remove</button></div>').join('') || '<div style="color:var(--mute);font-size:.85rem">none yet</div>') +
+      ((a.overpay || []).map(o => '<div class="li"><div><b>#' + o.seed_from + (o.seed_to !== o.seed_from ? ' to #' + o.seed_to : '') + '</b> × ' + o.multiplier + '<br><small>' + esc(o.note) + (o.auto ? ' · learned from ' + o.hits + ' sale' + (o.hits === 1 ? '' : 's') : '') + '</small></div><button data-mkadm="opdel" data-id="' + o.id + '">Remove</button></div>').join('') || '<div style="color:var(--mute);font-size:.85rem">none yet</div>') +
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.6rem"><div><label>Pattern from</label><input id="mk_pf" type="number" min="1" max="999" value="100"></div><div><label>to</label><input id="mk_pt" type="number" min="1" max="999" value="100"></div><div><label>Price multiplier</label><input id="mk_pm" type="number" min="0.1" step="0.1" value="3"></div><div><label>Note</label><input id="mk_pn" placeholder="e.g. fade seed"></div></div>' +
       '<div class="btns" style="margin-top:.6rem"><button data-mkadm="opadd">Add pattern price</button></div></details>';
   }
@@ -2648,15 +2705,15 @@ async function mkItemRender() {
   const ords = d.my_orders || [], book = d.order_book || {};
   const ordHtml = '<div class="op"><b>Buy orders</b><p style="color:var(--mute);font-size:.85rem;margin:.2rem 0 .5rem">' + (book.n ? book.n + ' open buy orders, highest ' + money(book.max) + '.' : 'No open buy orders.') + ' Your money is held until something at or under your price is listed, and any difference is refunded.</p>' +
     ords.map(o => '<div class="li"><div><b>' + (o.cond || 'Any condition') + '</b><br><small>up to ' + money(o.max_price) + '</small></div><button data-ordercancel="' + o.id + '">Cancel order</button></div>').join('') +
-    '<div class="btns" style="margin-top:.5rem"><select id="mkOrdCond" style="max-width:170px"><option value="">Any condition</option>' + CONDS.map(c => '<option>' + c + '</option>').join('') + '</select><input id="mkOrdPrice" type="number" min="0.03" step="0.01" value="' + Number(d.price || 1).toFixed(2) + '" style="width:100px"><button class="primary" data-order="1">Place buy order</button></div></div>';
+    '<div class="btns" style="margin-top:.5rem">' + (isCase ? '' : '<select id="mkOrdCond" style="max-width:170px"><option value="">Any condition</option>' + CONDS.map(c => '<option>' + c + '</option>').join('') + '</select>') + '<input id="mkOrdPrice" type="number" min="0.03" step="0.01" value="' + Number(d.price || 1).toFixed(2) + '" style="width:100px"><button class="primary" data-order="1">Place buy order</button></div></div>';
   $('mkView').innerHTML = '<div class="btns"><button data-mkback="1">← All items</button></div>' +
-    '<div class="op" style="margin-top:.6rem"><div class="row2"><div style="display:flex;gap:1rem;align-items:center"><div style="width:96px;text-align:center">' + itemImg(it, 1, 90, 0.2) + '</div><div><h2 style="color:' + (RCOL[it.rarity] || '#fff') + '">' + esc(it.name) + '</h2><div style="color:var(--mute)">' + esc(it.rarity) + (it.kind ? ' · ' + esc(it.kind) : '') + '</div><div style="color:var(--mute);font-size:.85rem">' + esc(it.description || '') + '</div></div></div>' +
-    '<div style="text-align:right"><div style="color:var(--mute);font-size:.85rem">Market price (Average wear)</div><div style="font-size:1.8rem;color:var(--gold);font-weight:700">' + (d.price != null ? money(d.price) : '-') + '</div></div></div></div>' + adm +
-    '<div class="op"><div class="row2"><b>Price history</b><span class="btns">' + [7, 30, 90].map(n => '<button data-days="' + n + '" class="' + (n === mkDays ? 'primary' : '') + '">' + n + ' days</button>').join('') + '</span></div><div style="margin-top:.6rem">' + mkChart((h.data || {}).series, (h.data || {}).sales) + '</div>' +
-    '<table class="mktbl" style="margin-top:.8rem"><tr><th>Condition</th><th>Price</th><th>Lowest</th><th>Listed</th><th>Sold 24h</th><th>7 days</th><th>30 days</th></tr>' + tbl + '</table></div>' +
-    (mine ? '<div class="op"><b>Your copies</b><p style="color:var(--mute);font-size:.85rem;margin:.2rem 0 .5rem">You keep ' + Math.round((1 - fee) * 1000) / 10 + '% of the price you list at (a ' + Math.round(fee * 1000) / 10 + '% fee). Selling now takes the best offer immediately.</p>' + mine + '</div>' : '') +
-    ordHtml + '<div class="op"><div class="row2"><b>For sale (' + ls.length + ')</b><select id="mkCondSel" style="max-width:190px"><option value="">All conditions</option>' + CONDS.map(c => '<option' + (c === mkCondSel ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></div>' +
-    '<table class="mktbl" style="margin-top:.5rem"><tr><th>Condition</th><th>Wear</th><th>Pattern</th><th>Price</th><th></th></tr>' + (listings || '<tr><td colspan="5" style="color:var(--mute)">Nothing for sale right now.</td></tr>') + '</table><small style="color:var(--mute)">Click a row to inspect that exact item.</small></div>';
+    '<div class="op" style="margin-top:.6rem"><div class="row2"><div style="display:flex;gap:1rem;align-items:center"><div style="width:96px;text-align:center">' + mkImg(it, 90, 0.2) + '</div><div><h2 style="color:' + (RCOL[it.rarity] || '#fff') + '">' + esc(it.name) + '</h2><div style="color:var(--mute)">' + esc(it.rarity) + (it.kind ? ' · ' + esc(it.kind) : '') + '</div><div style="color:var(--mute);font-size:.85rem">' + esc(it.description || '') + '</div></div></div>' +
+    '<div style="text-align:right"><div style="color:var(--mute);font-size:.85rem">Market price (Average wear)</div><div style="font-size:1.8rem;color:var(--gold);font-weight:700">' + (d.price != null ? money(d.price) : '-') + '</div></div></div></div>' + adm + caseContents +
+    '<div class="op"><div class="row2"><b>Price history</b><span class="btns">' + [7, 30, 90].map(n => '<button data-days="' + n + '" class="' + (n === mkDays ? 'primary' : '') + '">' + n + ' days</button>').join('') + '</span></div><div style="margin-top:.6rem">' + mkChart((h.data || {}).series, (h.data || {}).sales, isCase) + '</div>' +
+    (isCase ? '' : '<table class="mktbl" style="margin-top:.8rem"><tr><th>Condition</th><th>Price</th><th>Lowest</th><th>Listed</th><th>Sold 24h</th><th>7 days</th><th>30 days</th></tr>' + tbl + '</table>') + '</div>' +
+    ((isCase ? mineCase : mine) ? '<div class="op"><b>Your copies</b><p style="color:var(--mute);font-size:.85rem;margin:.2rem 0 .5rem">You keep ' + Math.round((1 - fee) * 1000) / 10 + '% of the price you list at (a ' + Math.round(fee * 1000) / 10 + '% fee). Selling now takes the best offer immediately.</p>' + (isCase ? mineCase : mine) + '</div>' : '') +
+    ordHtml + '<div class="op"><div class="row2"><b>For sale (' + ls.length + ')</b>' + (isCase ? '' : '<select id="mkCondSel" style="max-width:190px"><option value="">All conditions</option>' + CONDS.map(c => '<option' + (c === mkCondSel ? ' selected' : '') + '>' + c + '</option>').join('') + '</select>') + '</div>' +
+    '<table class="mktbl" style="margin-top:.5rem">' + (isCase ? '<tr><th>Price</th><th></th></tr>' : '<tr><th>Condition</th><th>Wear</th><th>Pattern</th><th>Price</th><th></th></tr>') + (listings || '<tr><td colspan="5" style="color:var(--mute)">Nothing for sale right now.</td></tr>') + '</table><small style="color:var(--mute)">Click a row to inspect that exact item.</small></div>';
   window.mkLs = ls; window.mkIt = it;
 }
 $('mkView').addEventListener('input', e => { if (e.target.id === 'mkQ' || e.target.id === 'mkSort' || e.target.id === 'mkRar') mkGridDraw(); });
@@ -2673,12 +2730,16 @@ $('mkView').addEventListener('click', async e => {
     const { data, error } = await db.rpc('market_buy', { p_listing: buy.dataset.buy, p_price: Number(buy.dataset.price) });
     if (error) { showErr(error.message); return mkItemRender(); }
     playSound('purchase'); mkRefreshBal();
-    const bi = window.mkIt; inspect(bi, Number(data.wear), data.pattern_seed, 'You bought:'); return mkItemRender();
+    const bi = window.mkIt; if (!bi.is_case) inspect(bi, Number(data.wear), data.pattern_seed, 'You bought:'); return mkItemRender();
   }
   const cn = t.closest('[data-cancel]');
   if (cn) { const { error } = await db.rpc('market_cancel', { p_listing: cn.dataset.cancel }); if (error) showErr(error.message); mkRefreshBal(); return mkRender(); }
   const sn = t.closest('[data-sellnow]');
   if (sn) { sn.disabled = true; const { data, error } = await db.rpc('market_sell_now', { p_inv: sn.dataset.sellnow }); if (error) showErr(error.message); else playSound('purchase'); mkRefreshBal(); return mkItemRender(); }
+  const lc = t.closest('[data-listcase]');
+  if (lc) { lc.disabled = true; const { error } = await db.rpc('market_list_case', { p_case: mkItemId, p_price: Number($('mkpc').value) }); if (error) showErr(error.message); mkRefreshBal(); return mkItemRender(); }
+  const sc = t.closest('[data-sellnowcase]');
+  if (sc) { sc.disabled = true; const { error } = await db.rpc('market_sell_now_case', { p_case: mkItemId }); if (error) showErr(error.message); else playSound('purchase'); mkRefreshBal(); return mkItemRender(); }
   const ls = t.closest('[data-list]');
   if (ls) {
     const price = Number($('mkp_' + ls.dataset.list).value);
@@ -2686,7 +2747,7 @@ $('mkView').addEventListener('click', async e => {
     mkRefreshBal(); return mkItemRender();
   }
   if (t.closest('[data-order]')) {
-    const { error } = await db.rpc('market_order', { p_item: mkItemId, p_cond: $('mkOrdCond').value || null, p_price: Number($('mkOrdPrice').value) });
+    const { error } = await db.rpc('market_order', { p_item: mkItemId, p_cond: $('mkOrdCond') ? ($('mkOrdCond').value || null) : null, p_price: Number($('mkOrdPrice').value) });
     if (error) showErr(error.message); mkRefreshBal(); return mkItemRender();
   }
   const oc = t.closest('[data-ordercancel]');
@@ -2754,7 +2815,7 @@ function openStorage(unitId) {
     else if (n) { const r = await db.rpc('storage_put', { p_unit: unitId, p_inv: n.dataset.in }); if (r.error) return showErr(r.error.message); again(); loadLoadouts(); }
   };
 }
-[['dvTabBoards', 'boards'], ['dvTabFlairs', 'flairs'], ['dvTabNfx', 'nameeffects'], ['dvTabOther', 'otheritems'], ['dvTabStore', 'storage_defs']].forEach(([id, t]) => { $(id).onclick = () => { devTab = t; devEdit = null; devRender(); }; });
+[['dvTabBoards', 'boards'], ['dvTabFlairs', 'flairs'], ['dvTabNfx', 'nameeffects'], ['dvTabOther', 'otheritems'], ['dvTabStore', 'storage_defs'], ['dvTabShopI', 'shop_items']].forEach(([id, t]) => { $(id).onclick = () => { devTab = t; devEdit = null; devRender(); }; });
 </script>
 </body>
 </html>
